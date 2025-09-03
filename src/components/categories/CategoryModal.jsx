@@ -1,0 +1,126 @@
+import React, { useState, useEffect } from "react";
+import { Modal, Button, Form } from "react-bootstrap";
+
+const CategoryModal = ({ show, handleClose, onSave, editCategory }) => {
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    itemsCount: 0,
+    lowStock: 0,
+    totalValue: 0,
+    created: new Date().toISOString().split("T")[0],
+    subCategories: [""],
+  });
+
+  useEffect(() => {
+    if (editCategory) {
+      setFormData({
+        ...editCategory,
+        subCategories: editCategory.subCategories || [""],
+      });
+    }
+  }, [editCategory]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubChange = (index, value) => {
+    const updated = [...formData.subCategories];
+    updated[index] = value;
+    setFormData((prev) => ({ ...prev, subCategories: updated }));
+  };
+
+  const addSubCategory = () => {
+    setFormData((prev) => ({
+      ...prev,
+      subCategories: [...prev.subCategories, ""],
+    }));
+  };
+
+  const removeSubCategory = (index) => {
+    const updated = formData.subCategories.filter((_, i) => i !== index);
+    setFormData((prev) => ({
+      ...prev,
+      subCategories: updated.length > 0 ? updated : [""],
+    }));
+  };
+
+  const handleSubmit = () => {
+    onSave({
+      ...formData,
+      subCategories: formData.subCategories.filter((s) => s.trim() !== ""),
+    });
+  };
+
+  return (
+    <Modal show={show} onHide={handleClose}>
+      <Modal.Header closeButton>
+        <Modal.Title>
+          {editCategory ? "Edit Category" : "Add Category"}
+        </Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <Form>
+          <Form.Group className="mb-3">
+            <Form.Label>Category Name</Form.Label>
+            <Form.Control
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              placeholder="Enter category name"
+            />
+          </Form.Group>
+          <Form.Group className="mb-3">
+            <Form.Label>Description</Form.Label>
+            <Form.Control
+              type="text"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              placeholder="Enter description"
+            />
+          </Form.Group>
+
+          {/* ✅ Sub-Categories */}
+          <Form.Group className="mb-3">
+            <Form.Label>Sub-Categories</Form.Label>
+            {formData.subCategories.map((sub, index) => (
+              <div key={index} className="d-flex mb-2">
+                <Form.Control
+                  type="text"
+                  value={sub}
+                  placeholder={`Sub-category ${index + 1}`}
+                  onChange={(e) => handleSubChange(index, e.target.value)}
+                />
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="ms-2"
+                  onClick={() => removeSubCategory(index)}
+                >
+                  ❌
+                </Button>
+              </div>
+            ))}
+            <Button variant="secondary" size="sm" onClick={addSubCategory}>
+              ➕ Add More
+            </Button>
+          </Form.Group>
+        </Form>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={handleClose}>
+          Cancel
+        </Button>
+        <Button variant="primary" onClick={handleSubmit}>
+          Save
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default CategoryModal;
