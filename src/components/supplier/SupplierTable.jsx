@@ -6,25 +6,29 @@ const SupplierTable = ({ suppliers, onEdit, onDelete }) => {
     <Table striped bordered hover responsive>
       <thead>
         <tr>
+          <th>Code</th>
           <th>Supplier Name</th>
           <th>Contact Person</th>
           <th>Phone</th>
           <th>Email</th>
+          <th>GST / VAT</th>
           <th>Payment Terms</th>
-          <th>Address</th>
+          <th>Status</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
         {suppliers.length > 0 ? (
           suppliers.map((supplier) => (
-            <tr key={supplier.id}>
+            <tr key={supplier.id || supplier.supplierCode}>
+              <td>{supplier.supplierCode}</td>
               <td>{supplier.name}</td>
               <td>{supplier.contactPerson}</td>
               <td>{supplier.phone}</td>
               <td>{supplier.email}</td>
+              <td>{supplier.gstNumber}</td>
               <td>{supplier.paymentTerms}</td>
-              <td>{supplier.address}</td>
+              <td>{supplier.status}</td>
               <td>
                 <Button
                   variant="outline-primary"
@@ -37,7 +41,8 @@ const SupplierTable = ({ suppliers, onEdit, onDelete }) => {
                 <Button
                   variant="outline-danger"
                   size="sm"
-                  onClick={() => onDelete(supplier.id)}
+                  disabled={!supplier.id} // prevent delete if no backend id yet
+                  onClick={() => supplier.id && onDelete(supplier.id)}
                 >
                   Delete
                 </Button>
@@ -46,7 +51,7 @@ const SupplierTable = ({ suppliers, onEdit, onDelete }) => {
           ))
         ) : (
           <tr>
-            <td colSpan="7" className="text-center">
+            <td colSpan="9" className="text-center">
               No suppliers found.
             </td>
           </tr>

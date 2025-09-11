@@ -3,12 +3,16 @@ import { Modal, Button, Form } from "react-bootstrap";
 
 const CategoryModal = ({ show, handleClose, onSave, editCategory }) => {
   const [formData, setFormData] = useState({
+    id: null,
+    categoryCode: "",
     name: "",
     description: "",
-    itemsCount: 0,
-    lowStock: 0,
-    totalValue: 0,
-    created: new Date().toISOString().split("T")[0],
+    status: "Active",
+    itemsCount: 0, // auto-calculated later
+    lowStock: 0,   // auto-calculated later
+    totalValue: 0, // auto-calculated later
+    createdAt: new Date().toISOString().split("T")[0],
+    updatedAt: new Date().toISOString().split("T")[0],
     subCategories: [""],
   });
 
@@ -50,6 +54,7 @@ const CategoryModal = ({ show, handleClose, onSave, editCategory }) => {
   const handleSubmit = () => {
     onSave({
       ...formData,
+      updatedAt: new Date().toISOString().split("T")[0], // update timestamp
       subCategories: formData.subCategories.filter((s) => s.trim() !== ""),
     });
   };
@@ -64,6 +69,17 @@ const CategoryModal = ({ show, handleClose, onSave, editCategory }) => {
       <Modal.Body>
         <Form>
           <Form.Group className="mb-3">
+            <Form.Label>Category Code</Form.Label>
+            <Form.Control
+              type="text"
+              name="categoryCode"
+              value={formData.categoryCode}
+              onChange={handleChange}
+              placeholder="e.g. ELEC, CAT-001"
+            />
+          </Form.Group>
+
+          <Form.Group className="mb-3">
             <Form.Label>Category Name</Form.Label>
             <Form.Control
               type="text"
@@ -73,6 +89,7 @@ const CategoryModal = ({ show, handleClose, onSave, editCategory }) => {
               placeholder="Enter category name"
             />
           </Form.Group>
+
           <Form.Group className="mb-3">
             <Form.Label>Description</Form.Label>
             <Form.Control
@@ -82,6 +99,19 @@ const CategoryModal = ({ show, handleClose, onSave, editCategory }) => {
               onChange={handleChange}
               placeholder="Enter description"
             />
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>Status</Form.Label>
+            <Form.Select
+              name="status"
+              value={formData.status}
+              onChange={handleChange}
+            >
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Archived">Archived</option>
+            </Form.Select>
           </Form.Group>
 
           {/* ✅ Sub-Categories */}

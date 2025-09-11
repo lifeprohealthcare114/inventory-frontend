@@ -1,55 +1,52 @@
-import React, { useState } from "react";
-import { Card, Row, Col, Button, Table, Badge } from "react-bootstrap";
+import React, { useMemo, useState } from "react";
+import { Card, Row, Col, Button, Table, Badge, Spinner, Form, InputGroup } from "react-bootstrap";
 import ReceiveStockModal from "./ReceiveStockModal";
 import IssueStockModal from "./IssueStockModal";
+import { toast } from "react-toastify";
+import { format } from "date-fns";
 
-export default function StockMovements({ externalMovements, setExternalMovements }) {
-  const [movements, setMovements] = useState([
-    {
-      id: 1,
-      date: "1/15/2024",
-      item: "Dell Laptop Pro 15",
-      type: "Receive",
-      quantity: 20,
-      location: "Main Warehouse",
-      remarks: "New stock received from supplier",
-    },
-  ]);
-
+export default function StockMovements({ movements, addMovement, deleteMovement, loading }) {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [showIssueModal, setShowIssueModal] = useState(false);
+  const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
-  // Use external state if provided (so ItemCheckouts can push Issue/Return)
-  const allMovements = externalMovements || movements;
-  const updateMovements = setExternalMovements || setMovements;
+  // Filter and search movements
+  const filteredMovements = useMemo(() => {
+    return movements.filter(m =>
+      m.item.toLowerCase().includes(search.toLowerCase()) ||
+      (m.department || m.purpose || "").toLowerCase().includes(search.toLowerCase())
+    );
+  }, [movements, search]);
 
-  const calculateStockLevels = (list) => {
-    const stock = {};
-    list.forEach((m) => {
+  // Pagination
+  const totalPages = Math.ceil(filteredMovements.length / pageSize);
+  const paginatedMovements = filteredMovements.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  // Stock levels
+  const stockLevels = useMemo(() => {
+    return movements.reduce((acc, m) => {
       const key = `${m.item}|${m.location}`;
-      if (!stock[key]) stock[key] = 0;
-      if (m.type === "Receive") stock[key] += Number(m.quantity);
-      if (m.type === "Issue") stock[key] -= Number(m.quantity);
-    });
-    return stock;
-  };
+      if (!acc[key]) acc[key] = 0;
+      if (m.type === "RECEIVE") acc[key] += Number(m.quantity);
+      if (m.type === "ISSUE") acc[key] -= Number(m.quantity);
+      return acc;
+    }, {});
+  }, [movements]);
 
-  const addMovement = (movement) => {
-    const newList = [
-      ...allMovements,
-      { ...movement, id: Date.now(), date: new Date().toLocaleString() },
-    ];
-    updateMovements(newList);
-  };
-
-  const handleDelete = (movement) => {
-    if (window.confirm(`Delete stock movement for ${movement.item}?`)) {
-      const newList = allMovements.filter((m) => m.id !== movement.id);
-      updateMovements(newList);
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this movement?")) return;
+    try {
+      await deleteMovement(id);
+      toast.success("Stock movement deleted successfully!");
+    } catch (err) {
+      toast.error("Failed to delete movement.");
     }
   };
-
-  const stockLevels = calculateStockLevels(allMovements);
 
   return (
     <Card>
@@ -57,84 +54,104 @@ export default function StockMovements({ externalMovements, setExternalMovements
         <Row className="align-items-center">
           <Col>
             <h5>Stock Movements</h5>
-            <small className="text-muted">
-              Track all inventory transactions and stock movements.
-            </small>
+            <small className="text-muted">Track all inventory transactions and stock levels.</small>
           </Col>
           <Col className="text-end">
-            <Button
-              variant="success"
-              className="me-2"
-              onClick={() => setShowReceiveModal(true)}
-            >
-              Receive Stock
-            </Button>
-            <Button
-              variant="warning"
-              onClick={() => setShowIssueModal(true)}
-            >
-              Issue Stock
-            </Button>
+            <Button variant="success" className="me-2" onClick={() => setShowReceiveModal(true)}>Receive Stock</Button>
+            <Button variant="warning" onClick={() => setShowIssueModal(true)}>Issue Stock</Button>
+          </Col>
+        </Row>
+        <Row className="mt-2">
+          <Col md={4}>
+            <InputGroup>
+              <InputGroup.Text>Search</InputGroup.Text>
+              <Form.Control
+                placeholder="Item or Department"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+              />
+            </InputGroup>
           </Col>
         </Row>
       </Card.Header>
       <Card.Body>
-        <Table striped bordered hover responsive>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Item</th>
-              <th>Type</th>
-              <th>Quantity</th>
-              <th>Location</th>
-              <th>Remaining Stock</th>
-              <th>Remarks</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {allMovements.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-5"><Spinner animation="border" /></div>
+        ) : (
+          <Table striped bordered hover responsive>
+            <thead>
               <tr>
-                <td colSpan="8" className="text-center">
-                  No stock movements found.
-                </td>
+                <th>Date</th>
+                <th>Reference No.</th>
+                <th>Batch No.</th>
+                <th>Expiry Date</th>
+                <th>Item</th>
+                <th>Type</th>
+                <th>Quantity</th>
+                <th>Warehouse</th>
+                <th>Department/Purpose</th>
+                <th>Remaining Stock</th>
+                <th>Remarks</th>
+                <th>Actions</th>
               </tr>
-            ) : (
-              allMovements.map((m) => {
-                const key = `${m.item}|${m.location}`;
-                return (
-                  <tr key={m.id}>
-                    <td>{m.date}</td>
-                    <td>{m.item}</td>
-                    <td>
-                      <Badge bg={m.type === "Receive" ? "success" : "danger"}>
-                        {m.type}
-                      </Badge>
-                    </td>
-                    <td className={m.type === "Receive" ? "text-success" : "text-danger"}>
-                      {m.type === "Receive" ? `+${m.quantity}` : `-${m.quantity}`}
-                    </td>
-                    <td>{m.location}</td>
-                    <td><strong>{stockLevels[key]}</strong></td>
-                    <td>{m.remarks}</td>
-                    <td>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => handleDelete(m)}
-                      >
-                        Delete
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </Table>
+            </thead>
+            <tbody>
+              {paginatedMovements.length === 0 ? (
+                <tr><td colSpan="12" className="text-center">No stock movements found.</td></tr>
+              ) : (
+                paginatedMovements.map((m) => {
+                  const key = `${m.item}|${m.location}`;
+                  return (
+                    <tr key={m.id}>
+                      <td>{m.date ? format(new Date(m.date), "dd/MM/yyyy HH:mm") : "—"}</td>
+                      <td>{m.referenceNo || "—"}</td>
+                      <td>{m.batchNo || "—"}</td>
+                      <td>{m.expiryDate || "—"}</td>
+                      <td>{m.item}</td>
+                      <td><Badge bg={m.type === "RECEIVE" ? "success" : "danger"}>{m.type}</Badge></td>
+                      <td className={m.type === "RECEIVE" ? "text-success" : "text-danger"}>
+                        {m.type === "RECEIVE" ? `+${m.quantity}` : `-${m.quantity}`}
+                      </td>
+                      <td>{m.location}</td>
+                      <td>{m.department || m.purpose || "—"}</td>
+                      <td><strong>{stockLevels[key]}</strong></td>
+                      <td>{m.remarks || "—"}</td>
+                      <td>
+                        <Button size="sm" variant="danger" onClick={() => handleDelete(m.id)}>Delete</Button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </Table>
+        )}
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="d-flex justify-content-end align-items-center mt-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="me-2"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(prev => prev - 1)}
+            >
+              Prev
+            </Button>
+            <span>Page {currentPage} of {totalPages}</span>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="ms-2"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(prev => prev + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        )}
       </Card.Body>
 
-      {/* Modals */}
       {showReceiveModal && (
         <ReceiveStockModal
           show={showReceiveModal}
@@ -142,11 +159,23 @@ export default function StockMovements({ externalMovements, setExternalMovements
           onSave={addMovement}
         />
       )}
+
       {showIssueModal && (
         <IssueStockModal
           show={showIssueModal}
           onHide={() => setShowIssueModal(false)}
-          onSave={addMovement}
+          onSave={(movement) => {
+            // Stock validation
+            const key = `${movement.item}|${movement.location}`;
+            const available = stockLevels[key] || 0;
+            if (movement.quantity > available) {
+              toast.error(`Cannot issue more than available stock (${available})`);
+              return;
+            }
+            addMovement(movement);
+            toast.success("Stock issued successfully!");
+          }}
+          stockLevels={stockLevels}
         />
       )}
     </Card>

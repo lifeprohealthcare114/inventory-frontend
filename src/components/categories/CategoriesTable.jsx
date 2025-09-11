@@ -8,19 +8,23 @@ const CategoriesTable = ({ categories, onEdit, onDelete }) => {
       <Table striped bordered hover className="mt-3">
         <thead>
           <tr>
+            <th>Code</th>
             <th>Category Name</th>
             <th>Description</th>
-            <th>Sub-Categories</th> {/* ✅ Added */}
+            <th>Sub-Categories</th>
+            <th>Status</th>
             <th>Items Count</th>
             <th>Low Stock</th>
             <th>Total Value</th>
-            <th>Created</th>
+            <th>Created At</th>
+            <th>Updated At</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {categories.map((c) => (
             <tr key={c.id}>
+              <td>{c.categoryCode}</td>
               <td>
                 <strong>{c.name}</strong>
                 <br />
@@ -32,6 +36,19 @@ const CategoriesTable = ({ categories, onEdit, onDelete }) => {
                   ? c.subCategories.join(", ")
                   : "-"}
               </td>
+              <td>
+                <span
+                  className={`badge ${
+                    c.status === "Active"
+                      ? "bg-success"
+                      : c.status === "Inactive"
+                      ? "bg-warning"
+                      : "bg-secondary"
+                  }`}
+                >
+                  {c.status}
+                </span>
+              </td>
               <td>{c.itemsCount}</td>
               <td>
                 {c.lowStock > 0 ? (
@@ -40,24 +57,31 @@ const CategoriesTable = ({ categories, onEdit, onDelete }) => {
                   <span className="badge bg-secondary">0</span>
                 )}
               </td>
-              <td>${c.totalValue.toLocaleString()}</td>
-              <td>{c.created}</td>
               <td>
+                {c.totalValue.toLocaleString("en-IN", {
+                  style: "currency",
+                  currency: "INR",
+                })}
+              </td>
+              <td>{c.createdAt}</td>
+              <td>{c.updatedAt}</td>
+              <td>
+             
                 <Button
-                  variant="outline-primary"
-                  size="sm"
-                  onClick={() => onEdit(c)}
-                  className="me-2"
-                >
-                  ✏️
-                </Button>
-                <Button
-                  variant="outline-danger"
-                  size="sm"
-                  onClick={() => onDelete(c)}
-                >
-                  🗑️
-                </Button>
+                                  size="sm"
+                                  variant="outline-primary"
+                                  className="me-2"
+                                   onClick={() => onEdit(c)}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline-danger"
+                                     onClick={() => onDelete(c)}
+                                >
+                                  Delete
+                                </Button>
               </td>
             </tr>
           ))}

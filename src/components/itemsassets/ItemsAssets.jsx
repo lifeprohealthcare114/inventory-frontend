@@ -1,177 +1,155 @@
-// ItemsAssets.jsx
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import { Container, Row, Col, Button, Spinner } from "react-bootstrap";
-import { ToastContainer, toast } from "react-toastify";
-
-import ItemModal from "./ItemModal";
+import React, { useState, useEffect } from "react";
+import { Button } from "react-bootstrap";
 import ItemsTable from "./ItemsTable";
+import ItemModal from "./ItemModal";
 import DeleteConfirmModal from "../DeleteConfirmModal";
+import { useDataContext } from "../../context/DataContext";
+import axios from "axios";
 
-const API_BASE = "http://localhost:5000/items"; // change when you move to backend
+const ItemsAssets = () => {
+  const { items, addItem, editItem, removeItem, loading, error } = useDataContext();
 
-export default function ItemsAssets() {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  const [showItemModal, setShowItemModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
 
-  // Fetch items
-  const fetchItems = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get(API_BASE);
-      setItems(res.data || []);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to fetch items.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Fetch dropdown data
   useEffect(() => {
-    fetchItems();
+    const fetchData = async () => {
+      try {
+        const [catRes, supRes, whRes] = await Promise.all([
+          axios.get("http://localhost:8080/api/categories"),
+          axios.get("http://localhost:8080/api/suppliers"),
+          axios.get("http://localhost:8080/api/warehouses"),
+        ]);
+        setCategories(catRes.data);
+        setSuppliers(supRes.data);
+        setWarehouses(whRes.data);
+      } catch (err) {
+        console.error("Failed to fetch dropdown data:", err);
+      }
+    };
+    fetchData();
   }, []);
 
-  // Add or Update
-  const handleSaveItem = async (formData) => {
+  // Save item (add or edit)
+  const handleSave = async (formData) => {
     try {
+      let savedItem;
+
       if (formData.id) {
-        // update
-        await axios.put(`${API_BASE}/${formData.id}`, formData);
-        toast.success("Item updated successfully");
+        savedItem = await editItem(formData.id, formData);
       } else {
-        // create
-        await axios.post(API_BASE, formData);
-        toast.success("Item added successfully");
+        const { id, ...newItem } = formData;
+        savedItem = await addItem(newItem);
       }
-      setShowItemModal(false);
-      fetchItems();
+
+      if (!savedItem) {
+        console.error("Saved item is undefined. Check your context functions.");
+        return;
+      }
+
+      // Optional: Map nested objects for table display
+      const itemWithNested = {
+        ...savedItem,
+        category: categories.find(c => c.id === savedItem.categoryId) || null,
+        supplier: suppliers.find(s => s.id === savedItem.supplierId) || null,
+        warehouse: warehouses.find(w => w.id === savedItem.warehouseId) || null,
+      };
+
+      setEditingItem(null);
+      setShowModal(false);
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to save item");
+      console.error("Failed to save item:", err);
     }
   };
 
-  const handleEdit = (item) => {
-    setEditingItem(item);
-    setShowItemModal(true);
-  };
-
-  // Delete flow (open confirm modal)
-  const handleRequestDelete = (item) => {
-    setItemToDelete(item);
-    setShowDeleteModal(true);
-  };
-
+  // Delete item
   const handleConfirmDelete = async () => {
-    if (!itemToDelete) return;
+    if (!deleteTarget) return;
     try {
-      await axios.delete(`${API_BASE}/${itemToDelete.id}`);
-      toast.success("Item deleted");
-      setShowDeleteModal(false);
-      setItemToDelete(null);
-      fetchItems();
+      await removeItem(deleteTarget.id);
+      setDeleteTarget(null);
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to delete item");
+      console.error("Failed to delete item:", err);
     }
-  };
-
-  const handleAddClick = () => {
-    setEditingItem(null);
-    setShowItemModal(true);
   };
 
   return (
-    <Container fluid className="p-4">
-      <ToastContainer position="top-right" autoClose={2500} />
+    <div className="p-3">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h3>Items</h3>
+        <Button onClick={() => { setEditingItem(null); setShowModal(true); }}>+ Add Item</Button>
+      </div>
 
-      <Row className="align-items-center mb-3">
-        <Col>
-          <h4 className="mb-0">Items & Assets</h4>
-          <small className="text-muted">Manage your inventory items</small>
-        </Col>
-        <Col xs="auto">
-          <Button variant="outline-secondary" className="me-2" onClick={() => {
-            // placeholder for Export/Import - implement later
-            toast.info("Export/Import not implemented (placeholder)");
-          }}>
-            Export
-          </Button>
-          <Button variant="primary" onClick={handleAddClick}>
-            + Add Item
-          </Button>
-        </Col>
-      </Row>
+      {error && <div className="alert alert-danger">Error: {error}</div>}
+      {loading && <div className="alert alert-info">Loading items...</div>}
 
-      <Row className="mb-3">
-        <Col>
-          {/* Basic summary cards */}
-          <div className="d-flex gap-3">
-            <div className="card p-3 flex-fill">
-              <div className="text-muted small">Total Items</div>
-              <div className="h5 mb-0">{items.length}</div>
-            </div>
-            <div className="card p-3 flex-fill">
-              <div className="text-muted small">Low Stock</div>
-              <div className="h5 mb-0">
-                {items.filter(i => Number(i.quantity) <= Number(i.reorderLevel || 0)).length}
-              </div>
-            </div>
-            <div className="card p-3 flex-fill">
-              <div className="text-muted small">Out of Stock</div>
-              <div className="h5 mb-0">
-                {items.filter(i => Number(i.quantity) === 0).length}
-              </div>
-            </div>
-            <div className="card p-3 flex-fill">
-              <div className="text-muted small">Total Value</div>
-              <div className="h5 mb-0">
-                ${items.reduce((s, it) => s + (Number(it.price || 0) * Number(it.quantity || 0)), 0).toLocaleString()}
-              </div>
-            </div>
-          </div>
-        </Col>
-      </Row>
+      {/* Stats */}
+    {/* Stats */}
+<div className="d-flex gap-3 mb-4 flex-wrap">
+  <div className="card p-3 flex-fill text-center">
+    <h6>Total Items</h6>
+    <h4>{items.length}</h4>
+  </div>
+  <div className="card p-3 flex-fill text-center">
+    <h6>Total Quantity</h6>
+    <h4>{items.reduce((sum, i) => sum + (i.quantity || 0), 0)}</h4>
+  </div>
+  <div className="card p-3 flex-fill text-center">
+    <h6>Low Stock Items</h6>
+    <h4>{items.filter(i => i.quantity <= i.reorderLevel).length}</h4>
+  </div>
+  <div className="card p-3 flex-fill text-center">
+    <h6>Inactive Items</h6>
+    <h4>{items.filter(i => i.status === "Inactive").length}</h4>
+  </div>
+  <div className="card p-3 flex-fill text-center">
+    <h6>Total Inventory Value</h6>
+    <h4 style={{ color: "green" }}>
+      {items
+        .reduce((sum, i) => sum + (i.quantity || 0) * (i.price || 0), 0)
+        .toLocaleString("en-IN", { style: "currency", currency: "INR" })}
+    </h4>
+  </div>
+</div>
 
-      <Row>
-        <Col>
-          {loading ? (
-            <div className="text-center py-5">
-              <Spinner animation="border" role="status" />
-            </div>
-          ) : (
-            <ItemsTable
-              items={items}
-              onEdit={handleEdit}
-              onDeleteRequest={handleRequestDelete}
-              // optional: you can pass custom pageSize prop here
-            />
-          )}
-        </Col>
-      </Row>
 
-      {/* Add / Edit Modal */}
-      <ItemModal
-        show={showItemModal}
-        onClose={() => setShowItemModal(false)}
-        onSave={handleSaveItem}
-        itemToEdit={editingItem}
+      <ItemsTable
+        items={items}
+        onEdit={item => { setEditingItem(item); setShowModal(true); }}
+        onDelete={setDeleteTarget}
+        categories={categories}
+        suppliers={suppliers}
+        warehouses={warehouses}
       />
 
-      {/* Delete confirm */}
-      <DeleteConfirmModal
-        show={showDeleteModal}
-        onCancel={() => setShowDeleteModal(false)}
-        onConfirm={handleConfirmDelete}
-        item={itemToDelete}
-      />
-    </Container>
+      {showModal && (
+        <ItemModal
+          show={showModal}
+          handleClose={() => { setShowModal(false); setEditingItem(null); }}
+          editItem={editingItem}
+          onSave={handleSave}
+          categories={categories}
+          suppliers={suppliers}
+          warehouses={warehouses}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteConfirmModal
+          show={!!deleteTarget}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleConfirmDelete}
+          item={deleteTarget}
+        />
+      )}
+    </div>
   );
-}
+};
+
+export default ItemsAssets;
