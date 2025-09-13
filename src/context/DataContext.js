@@ -1,8 +1,18 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+// src/context/DataContext.js
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from "react";
 import * as api from "../api/api";
 
 const DataContext = createContext();
 export const useDataContext = () => useContext(DataContext);
+
+// ---------- Settings ----------
+const LOW_STOCK_THRESHOLD = 5; // change this anytime
 
 const DataProvider = ({ children }) => {
   const [categories, setCategories] = useState([]);
@@ -10,7 +20,7 @@ const DataProvider = ({ children }) => {
   const [items, setItems] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
-  const [stockMovements, setStockMovements] = useState([]); // real state
+  const [stockMovements, setStockMovements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -38,82 +48,137 @@ const DataProvider = ({ children }) => {
     }
   };
 
+  // safe helpers for varying item property names
+  const getQty = (i) => (i?.stock ?? i?.quantity ?? i?.qty ?? 0);
+  const getPrice = (i) => (i?.price ?? i?.cost ?? 0);
+
+  // ---------- Enrichers ----------
+  const enrichCategories = (categoriesList, itemsList) =>
+    categoriesList.map((c) => {
+      const relatedItems = itemsList.filter((i) => i.categoryId === c.id);
+      const itemsCount = relatedItems.length;
+      const lowStock = relatedItems.filter((i) => getQty(i) < LOW_STOCK_THRESHOLD)
+        .length;
+      const totalValue = relatedItems.reduce(
+        (sum, i) => sum + getQty(i) * getPrice(i),
+        0
+      );
+      return { ...c, itemsCount, lowStock, totalValue };
+    });
+
+  const enrichWarehouses = (warehousesList, itemsList) =>
+    warehousesList.map((w) => {
+      const relatedItems = itemsList.filter((i) => i.warehouseId === w.id);
+      const itemsCount = relatedItems.length;
+      const value = relatedItems.reduce(
+        (sum, i) => sum + getQty(i) * getPrice(i),
+        0
+      );
+      const associatedItems = relatedItems.map((i) => i.name || i.itemName || i.code || "").filter(Boolean).join(", ");
+      return { ...w, itemsCount, value, associatedItems };
+    });
+
   // ---------- Fetchers ----------
-  const fetchCategories = async () =>
-    wrap(async () => {
-      const res = await api.fetchCategories();
-      setCategories(normalizeList(res));
-      return res.data;
-    });
+  // These fetchers return normalized lists and also update the raw state
+  const fetchCategories = useCallback(async () => {
+    const res = await api.fetchCategories();
+    const list = normalizeList(res);
+    setCategories(list); // set raw for components that expect raw until enrichment runs
+    return list;
+  }, []);
 
-  const fetchSuppliers = async () =>
-    wrap(async () => {
-      const res = await api.fetchSuppliers();
-      setSuppliers(normalizeList(res));
-      return res.data;
-    });
+  const fetchSuppliers = useCallback(async () => {
+    const res = await api.fetchSuppliers();
+    const list = normalizeList(res);
+    setSuppliers(list);
+    return list;
+  }, []);
 
-  const fetchItems = async () =>
-    wrap(async () => {
-      const res = await api.fetchItems();
-      setItems(normalizeList(res));
-      return res.data;
-    });
+  const fetchItems = useCallback(async () => {
+    const res = await api.fetchItems();
+    const list = normalizeList(res);
+    setItems(list);
+    return list;
+  }, []);
 
-  const fetchWarehouses = async () =>
-    wrap(async () => {
-      const res = await api.fetchWarehouses();
-      setWarehouses(normalizeList(res));
-      return res.data;
-    });
+  const fetchWarehouses = useCallback(async () => {
+    const res = await api.fetchWarehouses();
+    const list = normalizeList(res);
+    setWarehouses(list);
+    return list;
+  }, []);
 
-  const fetchPurchaseOrders = async () =>
-    wrap(async () => {
-      const res = await api.fetchPurchaseOrders();
-      setPurchaseOrders(normalizeList(res));
-      return res.data;
-    });
+  const fetchPurchaseOrders = useCallback(async () => {
+    const res = await api.fetchPurchaseOrders();
+    const list = normalizeList(res);
+    setPurchaseOrders(list);
+    return list;
+  }, []);
 
-  const fetchStockMovements = async () =>
-    wrap(async () => {
-      const res = await api.fetchStockMovements();
-      setStockMovements(normalizeList(res));
-      return res.data;
-    });
+  const fetchStockMovements = useCallback(async () => {
+    const res = await api.fetchStockMovements();
+    const list = normalizeList(res);
+    setStockMovements(list);
+    return list;
+  }, []);
 
-  const fetchAll = async () => {
-    setLoading(true);
-    clearError();
-    await Promise.all([
-      fetchCategories(),
-      fetchSuppliers(),
-      fetchItems(),
-      fetchWarehouses(),
-      fetchPurchaseOrders(),
-      fetchStockMovements(),
-    ]);
-    setLoading(false);
-  };
+  // fetchAll: fetch raw resources, then enrich categories & warehouses based on items
+  const fetchAll = useCallback(
+    async () => {
+      setLoading(true);
+      clearError();
 
-  const reload = fetchAll;
+      // fetch raw lists (each fetcher also sets the raw state)
+      const [catList, supList, itemList, whList, poList, stockList] =
+        await Promise.all([
+          fetchCategories(),
+          fetchSuppliers(),
+          fetchItems(),
+          fetchWarehouses(),
+          fetchPurchaseOrders(),
+          fetchStockMovements(),
+        ]);
+
+      // Now enrich categories & warehouses using the latest items
+      setItems(itemList); // ensure items state is the latest
+      setCategories(enrichCategories(catList, itemList));
+      setWarehouses(enrichWarehouses(whList, itemList));
+
+      // purchaseOrders, suppliers, stockMovements already set by fetchers above
+      setLoading(false);
+      return { catList, supList, itemList, whList, poList, stockList };
+    },
+    [
+      fetchCategories,
+      fetchSuppliers,
+      fetchItems,
+      fetchWarehouses,
+      fetchPurchaseOrders,
+      fetchStockMovements,
+    ]
+  );
 
   useEffect(() => {
     fetchAll();
-  }, []);
+  }, [fetchAll]);
 
-  // ---------- CRUD with Optimistic Updates ----------
+  const reload = fetchAll;
+
+  // ---------- CRUD Helpers (preserve return shapes & optimistic updates) ----------
+
   // Categories
   const addCategory = (data) =>
     wrap(async () => {
       const tempId = `temp-${Date.now()}`;
-      const optimistic = { ...data, id: tempId };
-      setCategories((prev) => [...prev, optimistic]);
-
+      setCategories((prev) => [...prev, { ...data, id: tempId }]);
       const res = await api.createCategory(data);
+      const saved = res?.data ?? res;
       setCategories((prev) =>
-        prev.map((c) => (c.id === tempId ? res.data : c))
+        prev.map((c) => (c.id === tempId ? saved : c))
       );
-      return res.data;
+      // refresh enriched stats
+      await fetchAll();
+      return saved;
     });
 
   const editCategory = (id, data) =>
@@ -122,13 +187,14 @@ const DataProvider = ({ children }) => {
       setCategories((prev) =>
         prev.map((c) => (c.id === id ? { ...c, ...data } : c))
       );
-
       try {
         const res = await api.updateCategory(id, data);
+        const saved = res?.data ?? res;
         setCategories((prev) =>
-          prev.map((c) => (c.id === id ? res.data : c))
+          prev.map((c) => (c.id === id ? saved : c))
         );
-        return res.data;
+        await fetchAll();
+        return saved;
       } catch (err) {
         setCategories(snap);
         throw err;
@@ -139,10 +205,10 @@ const DataProvider = ({ children }) => {
     wrap(async () => {
       const snap = snapshot(categories);
       setCategories((prev) => prev.filter((c) => c.id !== id));
-
       try {
-        await api.deleteCategory(id);
-        return true;
+        const res = await api.deleteCategory(id);
+        await fetchAll();
+        return res?.data ?? true;
       } catch (err) {
         setCategories(snap);
         throw err;
@@ -153,14 +219,13 @@ const DataProvider = ({ children }) => {
   const addSupplier = (data) =>
     wrap(async () => {
       const tempId = `temp-${Date.now()}`;
-      const optimistic = { ...data, id: tempId };
-      setSuppliers((prev) => [...prev, optimistic]);
-
+      setSuppliers((prev) => [...prev, { ...data, id: tempId }]);
       const res = await api.createSupplier(data);
+      const saved = res?.data ?? res;
       setSuppliers((prev) =>
-        prev.map((s) => (s.id === tempId ? res.data : s))
+        prev.map((s) => (s.id === tempId ? saved : s))
       );
-      return res.data;
+      return saved;
     });
 
   const editSupplier = (id, data) =>
@@ -169,13 +234,13 @@ const DataProvider = ({ children }) => {
       setSuppliers((prev) =>
         prev.map((s) => (s.id === id ? { ...s, ...data } : s))
       );
-
       try {
         const res = await api.updateSupplier(id, data);
+        const saved = res?.data ?? res;
         setSuppliers((prev) =>
-          prev.map((s) => (s.id === id ? res.data : s))
+          prev.map((s) => (s.id === id ? saved : s))
         );
-        return res.data;
+        return saved;
       } catch (err) {
         setSuppliers(snap);
         throw err;
@@ -186,28 +251,27 @@ const DataProvider = ({ children }) => {
     wrap(async () => {
       const snap = snapshot(suppliers);
       setSuppliers((prev) => prev.filter((s) => s.id !== id));
-
       try {
-        await api.deleteSupplier(id);
-        return true;
+        const res = await api.deleteSupplier(id);
+        return res?.data ?? true;
       } catch (err) {
         setSuppliers(snap);
         throw err;
       }
     });
 
-  // Items
+  // Items (preserve returning saved item and refresh enrichment)
   const addItem = (data) =>
     wrap(async () => {
       const tempId = `temp-${Date.now()}`;
-      const optimistic = { ...data, id: tempId };
-      setItems((prev) => [...prev, optimistic]);
-
+      setItems((prev) => [...prev, { ...data, id: tempId }]);
       const res = await api.createItem(data);
+      const savedItem = res?.data ?? res;
       setItems((prev) =>
-        prev.map((i) => (i.id === tempId ? res.data : i))
+        prev.map((i) => (i.id === tempId ? savedItem : i))
       );
-      return res.data;
+      await fetchAll(); // refresh categories + warehouses
+      return savedItem;
     });
 
   const editItem = (id, data) =>
@@ -216,13 +280,14 @@ const DataProvider = ({ children }) => {
       setItems((prev) =>
         prev.map((i) => (i.id === id ? { ...i, ...data } : i))
       );
-
       try {
         const res = await api.updateItem(id, data);
+        const saved = res?.data ?? res;
         setItems((prev) =>
-          prev.map((i) => (i.id === id ? res.data : i))
+          prev.map((i) => (i.id === id ? saved : i))
         );
-        return res.data;
+        await fetchAll();
+        return saved;
       } catch (err) {
         setItems(snap);
         throw err;
@@ -233,10 +298,10 @@ const DataProvider = ({ children }) => {
     wrap(async () => {
       const snap = snapshot(items);
       setItems((prev) => prev.filter((i) => i.id !== id));
-
       try {
-        await api.deleteItem(id);
-        return true;
+        const res = await api.deleteItem(id);
+        await fetchAll();
+        return res?.data ?? true;
       } catch (err) {
         setItems(snap);
         throw err;
@@ -247,14 +312,14 @@ const DataProvider = ({ children }) => {
   const addWarehouse = (data) =>
     wrap(async () => {
       const tempId = `temp-${Date.now()}`;
-      const optimistic = { ...data, id: tempId };
-      setWarehouses((prev) => [...prev, optimistic]);
-
+      setWarehouses((prev) => [...prev, { ...data, id: tempId }]);
       const res = await api.createWarehouse(data);
+      const saved = res?.data ?? res;
       setWarehouses((prev) =>
-        prev.map((w) => (w.id === tempId ? res.data : w))
+        prev.map((w) => (w.id === tempId ? saved : w))
       );
-      return res.data;
+      await fetchAll();
+      return saved;
     });
 
   const editWarehouse = (id, data) =>
@@ -263,13 +328,14 @@ const DataProvider = ({ children }) => {
       setWarehouses((prev) =>
         prev.map((w) => (w.id === id ? { ...w, ...data } : w))
       );
-
       try {
         const res = await api.updateWarehouse(id, data);
+        const saved = res?.data ?? res;
         setWarehouses((prev) =>
-          prev.map((w) => (w.id === id ? res.data : w))
+          prev.map((w) => (w.id === id ? saved : w))
         );
-        return res.data;
+        await fetchAll();
+        return saved;
       } catch (err) {
         setWarehouses(snap);
         throw err;
@@ -280,59 +346,12 @@ const DataProvider = ({ children }) => {
     wrap(async () => {
       const snap = snapshot(warehouses);
       setWarehouses((prev) => prev.filter((w) => w.id !== id));
-
       try {
-        await api.deleteWarehouse(id);
-        return true;
+        const res = await api.deleteWarehouse(id);
+        await fetchAll();
+        return res?.data ?? true;
       } catch (err) {
         setWarehouses(snap);
-        throw err;
-      }
-    });
-
-  // Purchase Orders
-  const addPurchaseOrder = (data) =>
-    wrap(async () => {
-      const tempId = `temp-${Date.now()}`;
-      const optimistic = { ...data, id: tempId };
-      setPurchaseOrders((prev) => [...prev, optimistic]);
-
-      const res = await api.createPurchaseOrder(data);
-      setPurchaseOrders((prev) =>
-        prev.map((p) => (p.id === tempId ? res.data : p))
-      );
-      return res.data;
-    });
-
-  const editPurchaseOrder = (id, data) =>
-    wrap(async () => {
-      const snap = snapshot(purchaseOrders);
-      setPurchaseOrders((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, ...data } : p))
-      );
-
-      try {
-        const res = await api.updatePurchaseOrder(id, data);
-        setPurchaseOrders((prev) =>
-          prev.map((p) => (p.id === id ? res.data : p))
-        );
-        return res.data;
-      } catch (err) {
-        setPurchaseOrders(snap);
-        throw err;
-      }
-    });
-
-  const removePurchaseOrder = (id) =>
-    wrap(async () => {
-      const snap = snapshot(purchaseOrders);
-      setPurchaseOrders((prev) => prev.filter((p) => p.id !== id));
-
-      try {
-        await api.deletePurchaseOrder(id);
-        return true;
-      } catch (err) {
-        setPurchaseOrders(snap);
         throw err;
       }
     });
@@ -341,14 +360,14 @@ const DataProvider = ({ children }) => {
   const addStockMovement = (data) =>
     wrap(async () => {
       const tempId = `temp-${Date.now()}`;
-      const optimistic = { ...data, id: tempId };
-      setStockMovements((prev) => [...prev, optimistic]);
-
+      setStockMovements((prev) => [...prev, { ...data, id: tempId }]);
       const res = await api.createStockMovement(data);
+      const saved = res?.data ?? res;
       setStockMovements((prev) =>
-        prev.map((s) => (s.id === tempId ? res.data : s))
+        prev.map((s) => (s.id === tempId ? saved : s))
       );
-      return res.data;
+      await fetchAll();
+      return saved;
     });
 
   const editStockMovement = (id, data) =>
@@ -357,13 +376,14 @@ const DataProvider = ({ children }) => {
       setStockMovements((prev) =>
         prev.map((s) => (s.id === id ? { ...s, ...data } : s))
       );
-
       try {
         const res = await api.updateStockMovement(id, data);
+        const saved = res?.data ?? res;
         setStockMovements((prev) =>
-          prev.map((s) => (s.id === id ? res.data : s))
+          prev.map((s) => (s.id === id ? saved : s))
         );
-        return res.data;
+        await fetchAll();
+        return saved;
       } catch (err) {
         setStockMovements(snap);
         throw err;
@@ -374,12 +394,55 @@ const DataProvider = ({ children }) => {
     wrap(async () => {
       const snap = snapshot(stockMovements);
       setStockMovements((prev) => prev.filter((s) => s.id !== id));
-
       try {
-        await api.deleteStockMovement(id);
-        return true;
+        const res = await api.deleteStockMovement(id);
+        await fetchAll();
+        return res?.data ?? true;
       } catch (err) {
         setStockMovements(snap);
+        throw err;
+      }
+    });
+
+  // ---------- Purchase Orders ----------
+  const normalizePO = (po) => ({
+    ...po,
+    supplierId: po.supplier?.id || po.supplierId || null,
+    supplierName: po.supplier?.name || po.supplierName || null,
+    itemId: po.item?.id || po.itemId || null,
+    itemName: po.item?.name || po.itemName || null,
+    totalAmount: (po.quantity || 0) * (po.price || 0),
+  });
+
+  const addPurchaseOrder = (data) =>
+    wrap(async () => {
+      const payload = normalizePO(data);
+      const res = await api.createPurchaseOrder(payload);
+      const saved = res?.data ?? res;
+      // If backend returns updated stock or PO lines, refresh; otherwise full refresh
+      await fetchAll();
+      return saved;
+    });
+
+  const editPurchaseOrder = (id, data) =>
+    wrap(async () => {
+      const payload = normalizePO(data);
+      const res = await api.updatePurchaseOrder(id, payload);
+      const saved = res?.data ?? res;
+      await fetchAll();
+      return saved;
+    });
+
+  const removePurchaseOrder = (id) =>
+    wrap(async () => {
+      const snap = snapshot(purchaseOrders);
+      setPurchaseOrders((prev) => prev.filter((p) => p.id !== id));
+      try {
+        const res = await api.deletePurchaseOrder(id);
+        await fetchAll();
+        return res?.data ?? true;
+      } catch (err) {
+        setPurchaseOrders(snap);
         throw err;
       }
     });
@@ -417,7 +480,7 @@ const DataProvider = ({ children }) => {
         editPurchaseOrder,
         removePurchaseOrder,
 
-        stock: stockMovements, // alias for dashboard compatibility
+        stock: stockMovements,
         stockMovements,
         addStockMovement,
         editStockMovement,

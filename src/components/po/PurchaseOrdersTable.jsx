@@ -1,11 +1,7 @@
 import React from "react";
 import { Table, Button } from "react-bootstrap";
 
-export default function PurchaseOrdersTable({ orders, onEdit, onDelete }) {
-  // Currency formatter
-  const formatCurrency = (value) =>
-    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
-
+export default function PurchaseOrdersTable({ orders = [], onEdit, onDelete }) {
   return (
     <Table striped bordered hover responsive>
       <thead>
@@ -16,31 +12,25 @@ export default function PurchaseOrdersTable({ orders, onEdit, onDelete }) {
           <th>Quantity</th>
           <th>Price</th>
           <th>Total</th>
+          <th>Status</th>
           <th>Order Date</th>
           <th>Expected Date</th>
-          <th>Status</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
-        {orders.length === 0 ? (
-          <tr>
-            <td colSpan="10" className="text-center">
-              No purchase orders found.
-            </td>
-          </tr>
-        ) : (
+        {orders.length > 0 ? (
           orders.map((order) => (
-            <tr key={order.id}>
+            <tr key={order.id || order.poNumber}>
               <td>{order.poNumber}</td>
-              <td>{order.supplier}</td>
-              <td>{order.item}</td>
+              <td>{order.supplierName || "Unknown Supplier"}</td>
+              <td>{order.itemName || "Unknown Item"}</td>
               <td>{order.quantity}</td>
-              <td>{formatCurrency(order.price)}</td>
-              <td>{formatCurrency(order.totalAmount || order.quantity * order.price)}</td>
-              <td className="text-nowrap">{order.orderDate}</td>
-              <td className="text-nowrap">{order.expectedDate}</td>
-              <td className="text-nowrap">{order.status}</td>
+              <td>{order.price}</td>
+              <td>{order.totalAmount}</td>
+              <td>{order.status}</td>
+              <td>{order.orderDate}</td>
+              <td>{order.expectedDate}</td>
               <td>
                 <Button
                   size="sm"
@@ -60,6 +50,12 @@ export default function PurchaseOrdersTable({ orders, onEdit, onDelete }) {
               </td>
             </tr>
           ))
+        ) : (
+          <tr>
+            <td colSpan="10" className="text-center">
+              No purchase orders found.
+            </td>
+          </tr>
         )}
       </tbody>
     </Table>
