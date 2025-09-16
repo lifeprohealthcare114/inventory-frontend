@@ -15,6 +15,7 @@ const ItemsTable = ({ items, onEdit, onDelete, categories, suppliers, warehouses
             <th>Supplier</th>
             <th>Quantity</th>
             <th>Unit Price</th>
+            <th>Last Purchase Price</th>
             <th>Reorder Level</th>
             <th>Status</th>
             <th>Total Value</th>
@@ -34,30 +35,43 @@ const ItemsTable = ({ items, onEdit, onDelete, categories, suppliers, warehouses
               <td>{warehouses.find(w => w.id === i.warehouseId)?.name || "-"}</td>
               <td>{suppliers.find(s => s.id === i.supplierId)?.name || "-"}</td>
               <td>{i.quantity}</td>
-              <td>{i.price.toLocaleString("en-IN", { style: "currency", currency: "INR" })}</td>
+              <td>
+                {i.price.toLocaleString("en-IN", { style: "currency", currency: "INR" })}
+              </td>
+              <td>
+                {i.lastPurchasePrice
+                  ? i.lastPurchasePrice.toLocaleString("en-IN", { style: "currency", currency: "INR" })
+                  : "-"}
+              </td>
               <td>{i.reorderLevel}</td>
-              <td><span className={`badge ${i.status === "Active" ? "bg-success" : "bg-secondary"}`}>{i.status}</span></td>
-              <td>{(i.quantity * i.price).toLocaleString("en-IN", { style: "currency", currency: "INR" })}</td>
+              <td>
+                <span className={`badge ${i.status === "Active" ? "bg-success" : "bg-secondary"}`}>
+                  {i.status}
+                </span>
+              </td>
+              <td>
+                {(i.quantity * i.price).toLocaleString("en-IN", { style: "currency", currency: "INR" })}
+              </td>
               <td>{i.barcode}</td>
               <td>{i.serialNumber}</td>
               <td>{i.batchNumber}</td>
               <td>{i.expiryDate || "-"}</td>
               <td>
-   <Button
-                                  size="sm"
-                                  variant="outline-primary"
-                                  className="me-2"
-                                  onClick={() => onEdit(i)}
-                                >
-                                  Edit
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline-danger"
-                                  onClick={() => onDelete(i)}
-                                >
-                                  Delete
-                                </Button>
+                <Button
+                  size="sm"
+                  variant="outline-primary"
+                  className="me-2"
+                  onClick={() => onEdit(i)}
+                >
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline-danger"
+                  onClick={() => onDelete(i)}
+                >
+                  Delete
+                </Button>
               </td>
             </tr>
           ))}

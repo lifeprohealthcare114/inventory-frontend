@@ -12,7 +12,7 @@ const DataContext = createContext();
 export const useDataContext = () => useContext(DataContext);
 
 // ---------- Settings ----------
-const LOW_STOCK_THRESHOLD = 5; // change this anytime
+const LOW_STOCK_THRESHOLD = 5;
 
 const DataProvider = ({ children }) => {
   const [categories, setCategories] = useState([]);
@@ -48,89 +48,110 @@ const DataProvider = ({ children }) => {
     }
   };
 
-  // safe helpers for varying item property names
-  const getQty = (i) => (i?.stock ?? i?.quantity ?? i?.qty ?? 0);
-  const getPrice = (i) => (i?.price ?? i?.cost ?? 0);
+  const getQty = (i) => i?.stock ?? i?.quantity ?? i?.qty ?? 0;
+  const getPrice = (i) => i?.price ?? i?.cost ?? 0;
 
   // ---------- Enrichers ----------
-  const enrichCategories = (categoriesList, itemsList) =>
-    categoriesList.map((c) => {
-      const relatedItems = itemsList.filter((i) => i.categoryId === c.id);
-      const itemsCount = relatedItems.length;
-      const lowStock = relatedItems.filter((i) => getQty(i) < LOW_STOCK_THRESHOLD)
-        .length;
-      const totalValue = relatedItems.reduce(
-        (sum, i) => sum + getQty(i) * getPrice(i),
-        0
-      );
-      return { ...c, itemsCount, lowStock, totalValue };
-    });
+  const enrichCategories = useCallback(
+    (categoriesList, itemsList) =>
+      categoriesList.map((c) => {
+        const relatedItems = itemsList.filter((i) => i.categoryId === c.id);
+        const itemsCount = relatedItems.length;
+        const lowStock = relatedItems.filter(
+          (i) => getQty(i) < LOW_STOCK_THRESHOLD
+        ).length;
+        const totalValue = relatedItems.reduce(
+          (sum, i) => sum + getQty(i) * getPrice(i),
+          0
+        );
+        return { ...c, itemsCount, lowStock, totalValue };
+      }),
+    []
+  );
 
-  const enrichWarehouses = (warehousesList, itemsList) =>
-    warehousesList.map((w) => {
-      const relatedItems = itemsList.filter((i) => i.warehouseId === w.id);
-      const itemsCount = relatedItems.length;
-      const value = relatedItems.reduce(
-        (sum, i) => sum + getQty(i) * getPrice(i),
-        0
-      );
-      const associatedItems = relatedItems.map((i) => i.name || i.itemName || i.code || "").filter(Boolean).join(", ");
-      return { ...w, itemsCount, value, associatedItems };
-    });
+  const enrichWarehouses = useCallback(
+    (warehousesList, itemsList) =>
+      warehousesList.map((w) => {
+        const relatedItems = itemsList.filter((i) => i.warehouseId === w.id);
+        const itemsCount = relatedItems.length;
+        const value = relatedItems.reduce(
+          (sum, i) => sum + getQty(i) * getPrice(i),
+          0
+        );
+        const associatedItems = relatedItems
+          .map((i) => i.name || i.itemName || i.code || "")
+          .filter(Boolean)
+          .join(", ");
+        return { ...w, itemsCount, value, associatedItems };
+      }),
+    []
+  );
+
+  // ---------- Safe Fetch ----------
+  const safeFetch = useCallback(async (fetchFn, setter) => {
+    try {
+      const res = await fetchFn();
+      const list = normalizeList(res);
+      setter(list);
+      return list;
+    } catch (err) {
+      handleError(err);
+      setter([]);
+      return [];
+    }
+  }, []);
 
   // ---------- Fetchers ----------
-  // These fetchers return normalized lists and also update the raw state
-  const fetchCategories = useCallback(async () => {
-    const res = await api.fetchCategories();
-    const list = normalizeList(res);
-    setCategories(list); // set raw for components that expect raw until enrichment runs
-    return list;
-  }, []);
+  const fetchCategories = useCallback(
+    () => safeFetch(api.fetchCategories, setCategories),
+    [safeFetch]
+  );
 
-  const fetchSuppliers = useCallback(async () => {
-    const res = await api.fetchSuppliers();
-    const list = normalizeList(res);
-    setSuppliers(list);
-    return list;
-  }, []);
+  const fetchSuppliers = useCallback(
+    () => safeFetch(api.fetchSuppliers, setSuppliers),
+    [safeFetch]
+  );
 
+  // ✅ Updated: ensure lastPurchasePrice is always available
   const fetchItems = useCallback(async () => {
-    const res = await api.fetchItems();
-    const list = normalizeList(res);
-    setItems(list);
-    return list;
+    try {
+      const res = await api.fetchItems();
+      const list = normalizeList(res).map((i) => ({
+        ...i,
+        lastPurchasePrice: i.lastPurchasePrice ?? null,
+      }));
+      setItems(list);
+      return list;
+    } catch (err) {
+      handleError(err);
+      setItems([]);
+      return [];
+    }
   }, []);
 
-  const fetchWarehouses = useCallback(async () => {
-    const res = await api.fetchWarehouses();
-    const list = normalizeList(res);
-    setWarehouses(list);
-    return list;
-  }, []);
+  const fetchWarehouses = useCallback(
+    () => safeFetch(api.fetchWarehouses, setWarehouses),
+    [safeFetch]
+  );
 
-  const fetchPurchaseOrders = useCallback(async () => {
-    const res = await api.fetchPurchaseOrders();
-    const list = normalizeList(res);
-    setPurchaseOrders(list);
-    return list;
-  }, []);
+  const fetchPurchaseOrders = useCallback(
+    () => safeFetch(api.fetchPurchaseOrders, setPurchaseOrders),
+    [safeFetch]
+  );
 
-  const fetchStockMovements = useCallback(async () => {
-    const res = await api.fetchStockMovements();
-    const list = normalizeList(res);
-    setStockMovements(list);
-    return list;
-  }, []);
+  const fetchStockMovements = useCallback(
+    () => safeFetch(api.fetchStockMovements, setStockMovements),
+    [safeFetch]
+  );
 
-  // fetchAll: fetch raw resources, then enrich categories & warehouses based on items
+  // ---------- Fetch All ----------
   const fetchAll = useCallback(
     async () => {
       setLoading(true);
       clearError();
 
-      // fetch raw lists (each fetcher also sets the raw state)
-      const [catList, supList, itemList, whList, poList, stockList] =
-        await Promise.all([
+      try {
+        const results = await Promise.allSettled([
           fetchCategories(),
           fetchSuppliers(),
           fetchItems(),
@@ -139,14 +160,21 @@ const DataProvider = ({ children }) => {
           fetchStockMovements(),
         ]);
 
-      // Now enrich categories & warehouses using the latest items
-      setItems(itemList); // ensure items state is the latest
-      setCategories(enrichCategories(catList, itemList));
-      setWarehouses(enrichWarehouses(whList, itemList));
+        const [catRes, supRes, itemRes, whRes, poRes, stockRes] = results.map(
+          (r) => (r.status === "fulfilled" ? r.value : [])
+        );
 
-      // purchaseOrders, suppliers, stockMovements already set by fetchers above
-      setLoading(false);
-      return { catList, supList, itemList, whList, poList, stockList };
+        setItems(itemRes);
+        setCategories(enrichCategories(catRes, itemRes));
+        setWarehouses(enrichWarehouses(whRes, itemRes));
+
+        setLoading(false);
+        return { catRes, supRes, itemRes, whRes, poRes, stockRes };
+      } catch (err) {
+        handleError(err);
+        setLoading(false);
+        return {};
+      }
     },
     [
       fetchCategories,
@@ -155,6 +183,8 @@ const DataProvider = ({ children }) => {
       fetchWarehouses,
       fetchPurchaseOrders,
       fetchStockMovements,
+      enrichCategories,
+      enrichWarehouses,
     ]
   );
 
@@ -164,8 +194,7 @@ const DataProvider = ({ children }) => {
 
   const reload = fetchAll;
 
-  // ---------- CRUD Helpers (preserve return shapes & optimistic updates) ----------
-
+  // ---------- CRUD Helpers ----------
   // Categories
   const addCategory = (data) =>
     wrap(async () => {
@@ -176,7 +205,6 @@ const DataProvider = ({ children }) => {
       setCategories((prev) =>
         prev.map((c) => (c.id === tempId ? saved : c))
       );
-      // refresh enriched stats
       await fetchAll();
       return saved;
     });
@@ -260,7 +288,7 @@ const DataProvider = ({ children }) => {
       }
     });
 
-  // Items (preserve returning saved item and refresh enrichment)
+  // Items
   const addItem = (data) =>
     wrap(async () => {
       const tempId = `temp-${Date.now()}`;
@@ -270,7 +298,7 @@ const DataProvider = ({ children }) => {
       setItems((prev) =>
         prev.map((i) => (i.id === tempId ? savedItem : i))
       );
-      await fetchAll(); // refresh categories + warehouses
+      await fetchAll();
       return savedItem;
     });
 
@@ -404,7 +432,7 @@ const DataProvider = ({ children }) => {
       }
     });
 
-  // ---------- Purchase Orders ----------
+  // Purchase Orders
   const normalizePO = (po) => ({
     ...po,
     supplierId: po.supplier?.id || po.supplierId || null,
@@ -419,7 +447,6 @@ const DataProvider = ({ children }) => {
       const payload = normalizePO(data);
       const res = await api.createPurchaseOrder(payload);
       const saved = res?.data ?? res;
-      // If backend returns updated stock or PO lines, refresh; otherwise full refresh
       await fetchAll();
       return saved;
     });

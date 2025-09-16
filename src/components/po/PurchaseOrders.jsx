@@ -3,6 +3,7 @@ import { Button, Container, Spinner, Alert } from "react-bootstrap";
 import { useDataContext } from "../../context/DataContext";
 import PurchaseOrderModal from "./PurchaseOrderModal";
 import PurchaseOrdersTable from "./PurchaseOrdersTable";
+import axios from "axios";
 
 export default function PurchaseOrders() {
   const {
@@ -49,6 +50,18 @@ export default function PurchaseOrders() {
     }
   };
 
+  // ✅ New function: Mark PO as Received
+  const handleReceive = async (order) => {
+    if (!window.confirm(`Mark PO ${order.poNumber} as Received?`)) return;
+    try {
+      await axios.put(`http://localhost:8080/api/purchase-orders/${order.id}/receive`);
+      await reload(); // refresh list + items
+    } catch (err) {
+      console.error("Failed to mark as received:", err);
+      setErrorMsg(err?.response?.data?.message || "❌ Failed to mark order as received.");
+    }
+  };
+
   return (
     <Container>
       <h2 className="my-4">Purchase Orders</h2>
@@ -74,6 +87,7 @@ export default function PurchaseOrders() {
             setShowModal(true);
           }}
           onDelete={(order) => handleDelete(order.id)}
+          onReceive={handleReceive}   // ✅ pass new handler
         />
       )}
 

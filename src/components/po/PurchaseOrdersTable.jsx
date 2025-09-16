@@ -1,7 +1,7 @@
 import React from "react";
 import { Table, Button } from "react-bootstrap";
 
-export default function PurchaseOrdersTable({ orders = [], onEdit, onDelete }) {
+export default function PurchaseOrdersTable({ orders = [], onEdit, onDelete, onReceive }) {
   return (
     <Table striped bordered hover responsive>
       <thead>
@@ -43,9 +43,18 @@ export default function PurchaseOrdersTable({ orders = [], onEdit, onDelete }) {
                 <Button
                   size="sm"
                   variant="outline-danger"
+                  className="me-2"
                   onClick={() => onDelete(order)}
                 >
                   Delete
+                </Button>
+                <Button
+                  size="sm"
+                  variant="success"
+                  disabled={order.status === "Received"}
+                  onClick={() => onReceive(order)}
+                >
+                  {order.status === "Received" ? "Received" : "Mark as Received"}
                 </Button>
               </td>
             </tr>

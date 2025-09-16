@@ -4,7 +4,7 @@ import CheckoutModal from "./CheckoutModal";
 import { toast } from "react-toastify";
 import { format } from "date-fns";
 
-export default function ItemCheckouts({ movements, addMovement, loading }) {
+export default function ItemCheckouts({ movements, addMovement, loading, stockLevels = {} }) {
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -162,10 +162,15 @@ export default function ItemCheckouts({ movements, addMovement, loading }) {
       </Card.Body>
 
       {showModal && (
-        <CheckoutModal show={showModal} onHide={() => setShowModal(false)} onSave={(m) => {
-          addMovement(m);
-          toast.success(`${m.item} checked out to ${m.person}`);
-        }} />
+        <CheckoutModal
+          show={showModal}
+          onHide={() => setShowModal(false)}
+          onSave={(m) => {
+            addMovement(m);
+            toast.success(`${m.item} checked out to ${m.person}`);
+          }}
+          stockLevels={stockLevels || {}}
+        />
       )}
     </Card>
   );
