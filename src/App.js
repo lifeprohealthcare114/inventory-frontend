@@ -7,11 +7,22 @@ import ItemsAssets from "./components/itemsassets/ItemsAssets";
 import Categories from "./components/categories/Categories";
 import Warehouses from "./components/warehouses/Warehouses";
 import PurchaseOrders from "./components/po/PurchaseOrders"; 
-import StockDashboard from "./components/Stock/StockDashboard"; 
 import Supplier from "./components/supplier/Supplier";
 import DataProvider from "./context/DataContext";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+
+// 🔹 Stock imports
+import StockMovementList from "./components/StockMovements/StockMovementList";
+import StockMovementModal from "./components/StockMovements/StockMovementModal";
+import StockAdjustmentList from "./components/StockAdjustments/StockAdjustmentsList";
+import StockAdjustmentForm from "./components/StockAdjustments/StockAdjustmentsForm";
+import LowStockList from "./components/Alerts/LowStockList";
+import ReorderModal from "./components/Alerts/ReorderModal";
+
+// 🔹 NEW Issuance & Return imports
+import IssueList from "./components/IssueReturn/IssueList";
+import IssueForm from "./components/IssueReturn/IssueForm";
 
 export default function App() {
   return (
@@ -33,8 +44,24 @@ export default function App() {
                 <Route path="/categories" element={<Categories />} />
                 <Route path="/warehouses" element={<Warehouses />} />
                 <Route path="/purchase-orders" element={<PurchaseOrders />} /> 
-                <Route path="/stock" element={<StockDashboard />} />
                 <Route path="/suppliers" element={<Supplier />} />
+
+                {/* 🔹 Stock Movement */}
+                <Route path="/stock-movements" element={<StockMovementList />} />
+                <Route path="/stock-movement/:id" element={<StockMovementModal />} />
+
+                {/* 🔹 Stock Adjustments */}
+                <Route path="/stock-adjustments" element={<StockAdjustmentList />} />
+                <Route path="/stock-adjustment/new" element={<StockAdjustmentForm />} />
+                <Route path="/stock-adjustment/:id" element={<StockAdjustmentForm />} />
+
+                {/* 🔹 Low Stock Alerts */}
+                <Route path="/alerts/low-stock" element={<LowStockList />} />
+                <Route path="/alerts/reorder" element={<ReorderModal />} />
+
+                {/* 🔹 Issuance & Return */}
+                <Route path="/issue-return" element={<IssueList />} />
+                <Route path="/issue-return/new" element={<IssueForm />} />
               </Routes>
             </div>
 

@@ -1,11 +1,5 @@
 // src/context/DataContext.js
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  useCallback,
-} from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import * as api from "../api/api";
 
 const DataContext = createContext();
@@ -14,6 +8,7 @@ export const useDataContext = () => useContext(DataContext);
 // ---------- Settings ----------
 const LOW_STOCK_THRESHOLD = 5;
 
+// ---------- Provider ----------
 const DataProvider = ({ children }) => {
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -32,9 +27,7 @@ const DataProvider = ({ children }) => {
 
   const clearError = () => setError(null);
 
-  const normalizeList = (res) =>
-    res?.data?.content ? res.data.content : res?.data || [];
-
+  const normalizeList = (res) => res?.data?.content ?? res?.data ?? [];
   const snapshot = (data) => JSON.parse(JSON.stringify(data));
 
   const wrap = async (fn) => {
@@ -52,40 +45,23 @@ const DataProvider = ({ children }) => {
   const getPrice = (i) => i?.price ?? i?.cost ?? 0;
 
   // ---------- Enrichers ----------
-  const enrichCategories = useCallback(
-    (categoriesList, itemsList) =>
-      categoriesList.map((c) => {
-        const relatedItems = itemsList.filter((i) => i.categoryId === c.id);
-        const itemsCount = relatedItems.length;
-        const lowStock = relatedItems.filter(
-          (i) => getQty(i) < LOW_STOCK_THRESHOLD
-        ).length;
-        const totalValue = relatedItems.reduce(
-          (sum, i) => sum + getQty(i) * getPrice(i),
-          0
-        );
-        return { ...c, itemsCount, lowStock, totalValue };
-      }),
-    []
-  );
+  const enrichCategories = useCallback((categoriesList, itemsList) =>
+    categoriesList.map((c) => {
+      const relatedItems = itemsList.filter((i) => i.categoryId === c.id);
+      const itemsCount = relatedItems.length;
+      const lowStock = relatedItems.filter((i) => getQty(i) < LOW_STOCK_THRESHOLD).length;
+      const totalValue = relatedItems.reduce((sum, i) => sum + getQty(i) * getPrice(i), 0);
+      return { ...c, itemsCount, lowStock, totalValue };
+    }), []);
 
-  const enrichWarehouses = useCallback(
-    (warehousesList, itemsList) =>
-      warehousesList.map((w) => {
-        const relatedItems = itemsList.filter((i) => i.warehouseId === w.id);
-        const itemsCount = relatedItems.length;
-        const value = relatedItems.reduce(
-          (sum, i) => sum + getQty(i) * getPrice(i),
-          0
-        );
-        const associatedItems = relatedItems
-          .map((i) => i.name || i.itemName || i.code || "")
-          .filter(Boolean)
-          .join(", ");
-        return { ...w, itemsCount, value, associatedItems };
-      }),
-    []
-  );
+  const enrichWarehouses = useCallback((warehousesList, itemsList) =>
+    warehousesList.map((w) => {
+      const relatedItems = itemsList.filter((i) => i.warehouseId === w.id);
+      const itemsCount = relatedItems.length;
+      const value = relatedItems.reduce((sum, i) => sum + getQty(i) * getPrice(i), 0);
+      const associatedItems = relatedItems.map((i) => i.name || i.itemName || i.code || "").filter(Boolean).join(", ");
+      return { ...w, itemsCount, value, associatedItems };
+    }), []);
 
   // ---------- Safe Fetch ----------
   const safeFetch = useCallback(async (fetchFn, setter) => {
@@ -102,24 +78,12 @@ const DataProvider = ({ children }) => {
   }, []);
 
   // ---------- Fetchers ----------
-  const fetchCategories = useCallback(
-    () => safeFetch(api.fetchCategories, setCategories),
-    [safeFetch]
-  );
-
-  const fetchSuppliers = useCallback(
-    () => safeFetch(api.fetchSuppliers, setSuppliers),
-    [safeFetch]
-  );
-
-  // ✅ Updated: ensure lastPurchasePrice is always available
-  const fetchItems = useCallback(async () => {
+  const fetchCategoriesData = useCallback(() => safeFetch(api.fetchCategories, setCategories), [safeFetch]);
+  const fetchSuppliersData = useCallback(() => safeFetch(api.fetchSuppliers, setSuppliers), [safeFetch]);
+  const fetchItemsData = useCallback(async () => {
     try {
       const res = await api.fetchItems();
-      const list = normalizeList(res).map((i) => ({
-        ...i,
-        lastPurchasePrice: i.lastPurchasePrice ?? null,
-      }));
+      const list = normalizeList(res).map((i) => ({ ...i, lastPurchasePrice: i.lastPurchasePrice ?? null }));
       setItems(list);
       return list;
     } catch (err) {
@@ -128,352 +92,80 @@ const DataProvider = ({ children }) => {
       return [];
     }
   }, []);
-
-  const fetchWarehouses = useCallback(
-    () => safeFetch(api.fetchWarehouses, setWarehouses),
-    [safeFetch]
-  );
-
-  const fetchPurchaseOrders = useCallback(
-    () => safeFetch(api.fetchPurchaseOrders, setPurchaseOrders),
-    [safeFetch]
-  );
-
-  const fetchStockMovements = useCallback(
-    () => safeFetch(api.fetchStockMovements, setStockMovements),
-    [safeFetch]
-  );
+  const fetchWarehousesData = useCallback(() => safeFetch(api.fetchWarehouses, setWarehouses), [safeFetch]);
+  const fetchPurchaseOrdersData = useCallback(() => safeFetch(api.fetchPurchaseOrders, setPurchaseOrders), [safeFetch]);
+  const fetchStockMovementsData = useCallback(() => safeFetch(api.fetchStockMovements, setStockMovements), [safeFetch]);
 
   // ---------- Fetch All ----------
-  const fetchAll = useCallback(
-    async () => {
-      setLoading(true);
-      clearError();
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    clearError();
+    try {
+      const results = await Promise.allSettled([
+        fetchCategoriesData(),
+        fetchSuppliersData(),
+        fetchItemsData(),
+        fetchWarehousesData(),
+        fetchPurchaseOrdersData(),
+        fetchStockMovementsData(),
+      ]);
 
-      try {
-        const results = await Promise.allSettled([
-          fetchCategories(),
-          fetchSuppliers(),
-          fetchItems(),
-          fetchWarehouses(),
-          fetchPurchaseOrders(),
-          fetchStockMovements(),
-        ]);
+      const [catRes, supRes, itemRes, whRes] = results.map((r) => (r.status === "fulfilled" ? r.value : []));
+      setItems(itemRes);
+      setCategories(enrichCategories(catRes, itemRes));
+      setWarehouses(enrichWarehouses(whRes, itemRes));
+      setLoading(false);
+      return results;
+    } catch (err) {
+      handleError(err);
+      setLoading(false);
+      return [];
+    }
+  }, [fetchCategoriesData, fetchSuppliersData, fetchItemsData, fetchWarehousesData, fetchPurchaseOrdersData, fetchStockMovementsData, enrichCategories, enrichWarehouses]);
 
-        const [catRes, supRes, itemRes, whRes, poRes, stockRes] = results.map(
-          (r) => (r.status === "fulfilled" ? r.value : [])
-        );
-
-        setItems(itemRes);
-        setCategories(enrichCategories(catRes, itemRes));
-        setWarehouses(enrichWarehouses(whRes, itemRes));
-
-        setLoading(false);
-        return { catRes, supRes, itemRes, whRes, poRes, stockRes };
-      } catch (err) {
-        handleError(err);
-        setLoading(false);
-        return {};
-      }
-    },
-    [
-      fetchCategories,
-      fetchSuppliers,
-      fetchItems,
-      fetchWarehouses,
-      fetchPurchaseOrders,
-      fetchStockMovements,
-      enrichCategories,
-      enrichWarehouses,
-    ]
-  );
-
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
-
+  useEffect(() => { fetchAll(); }, [fetchAll]);
   const reload = fetchAll;
 
-  // ---------- CRUD Helpers ----------
-  // Categories
-  const addCategory = (data) =>
-    wrap(async () => {
-      const tempId = `temp-${Date.now()}`;
-      setCategories((prev) => [...prev, { ...data, id: tempId }]);
-      const res = await api.createCategory(data);
-      const saved = res?.data ?? res;
-      setCategories((prev) =>
-        prev.map((c) => (c.id === tempId ? saved : c))
-      );
-      await fetchAll();
-      return saved;
-    });
-
-  const editCategory = (id, data) =>
-    wrap(async () => {
-      const snap = snapshot(categories);
-      setCategories((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, ...data } : c))
-      );
-      try {
-        const res = await api.updateCategory(id, data);
-        const saved = res?.data ?? res;
-        setCategories((prev) =>
-          prev.map((c) => (c.id === id ? saved : c))
-        );
-        await fetchAll();
-        return saved;
-      } catch (err) {
-        setCategories(snap);
-        throw err;
-      }
-    });
-
-  const removeCategory = (id) =>
-    wrap(async () => {
-      const snap = snapshot(categories);
-      setCategories((prev) => prev.filter((c) => c.id !== id));
-      try {
-        const res = await api.deleteCategory(id);
-        await fetchAll();
-        return res?.data ?? true;
-      } catch (err) {
-        setCategories(snap);
-        throw err;
-      }
-    });
-
-  // Suppliers
-  const addSupplier = (data) =>
-    wrap(async () => {
-      const tempId = `temp-${Date.now()}`;
-      setSuppliers((prev) => [...prev, { ...data, id: tempId }]);
-      const res = await api.createSupplier(data);
-      const saved = res?.data ?? res;
-      setSuppliers((prev) =>
-        prev.map((s) => (s.id === tempId ? saved : s))
-      );
-      return saved;
-    });
-
-  const editSupplier = (id, data) =>
-    wrap(async () => {
-      const snap = snapshot(suppliers);
-      setSuppliers((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, ...data } : s))
-      );
-      try {
-        const res = await api.updateSupplier(id, data);
-        const saved = res?.data ?? res;
-        setSuppliers((prev) =>
-          prev.map((s) => (s.id === id ? saved : s))
-        );
-        return saved;
-      } catch (err) {
-        setSuppliers(snap);
-        throw err;
-      }
-    });
-
-  const removeSupplier = (id) =>
-    wrap(async () => {
-      const snap = snapshot(suppliers);
-      setSuppliers((prev) => prev.filter((s) => s.id !== id));
-      try {
-        const res = await api.deleteSupplier(id);
-        return res?.data ?? true;
-      } catch (err) {
-        setSuppliers(snap);
-        throw err;
-      }
-    });
-
-  // Items
-  const addItem = (data) =>
-    wrap(async () => {
-      const tempId = `temp-${Date.now()}`;
-      setItems((prev) => [...prev, { ...data, id: tempId }]);
-      const res = await api.createItem(data);
-      const savedItem = res?.data ?? res;
-      setItems((prev) =>
-        prev.map((i) => (i.id === tempId ? savedItem : i))
-      );
-      await fetchAll();
-      return savedItem;
-    });
-
-  const editItem = (id, data) =>
-    wrap(async () => {
-      const snap = snapshot(items);
-      setItems((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, ...data } : i))
-      );
-      try {
-        const res = await api.updateItem(id, data);
-        const saved = res?.data ?? res;
-        setItems((prev) =>
-          prev.map((i) => (i.id === id ? saved : i))
-        );
-        await fetchAll();
-        return saved;
-      } catch (err) {
-        setItems(snap);
-        throw err;
-      }
-    });
-
-  const removeItem = (id) =>
-    wrap(async () => {
-      const snap = snapshot(items);
-      setItems((prev) => prev.filter((i) => i.id !== id));
-      try {
-        const res = await api.deleteItem(id);
-        await fetchAll();
-        return res?.data ?? true;
-      } catch (err) {
-        setItems(snap);
-        throw err;
-      }
-    });
-
-  // Warehouses
-  const addWarehouse = (data) =>
-    wrap(async () => {
-      const tempId = `temp-${Date.now()}`;
-      setWarehouses((prev) => [...prev, { ...data, id: tempId }]);
-      const res = await api.createWarehouse(data);
-      const saved = res?.data ?? res;
-      setWarehouses((prev) =>
-        prev.map((w) => (w.id === tempId ? saved : w))
-      );
-      await fetchAll();
-      return saved;
-    });
-
-  const editWarehouse = (id, data) =>
-    wrap(async () => {
-      const snap = snapshot(warehouses);
-      setWarehouses((prev) =>
-        prev.map((w) => (w.id === id ? { ...w, ...data } : w))
-      );
-      try {
-        const res = await api.updateWarehouse(id, data);
-        const saved = res?.data ?? res;
-        setWarehouses((prev) =>
-          prev.map((w) => (w.id === id ? saved : w))
-        );
-        await fetchAll();
-        return saved;
-      } catch (err) {
-        setWarehouses(snap);
-        throw err;
-      }
-    });
-
-  const removeWarehouse = (id) =>
-    wrap(async () => {
-      const snap = snapshot(warehouses);
-      setWarehouses((prev) => prev.filter((w) => w.id !== id));
-      try {
-        const res = await api.deleteWarehouse(id);
-        await fetchAll();
-        return res?.data ?? true;
-      } catch (err) {
-        setWarehouses(snap);
-        throw err;
-      }
-    });
-
-  // Stock Movements
-  const addStockMovement = (data) =>
-    wrap(async () => {
-      const tempId = `temp-${Date.now()}`;
-      setStockMovements((prev) => [...prev, { ...data, id: tempId }]);
-      const res = await api.createStockMovement(data);
-      const saved = res?.data ?? res;
-      setStockMovements((prev) =>
-        prev.map((s) => (s.id === tempId ? saved : s))
-      );
-      await fetchAll();
-      return saved;
-    });
-
-  const editStockMovement = (id, data) =>
-    wrap(async () => {
-      const snap = snapshot(stockMovements);
-      setStockMovements((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, ...data } : s))
-      );
-      try {
-        const res = await api.updateStockMovement(id, data);
-        const saved = res?.data ?? res;
-        setStockMovements((prev) =>
-          prev.map((s) => (s.id === id ? saved : s))
-        );
-        await fetchAll();
-        return saved;
-      } catch (err) {
-        setStockMovements(snap);
-        throw err;
-      }
-    });
-
-  const removeStockMovement = (id) =>
-    wrap(async () => {
-      const snap = snapshot(stockMovements);
-      setStockMovements((prev) => prev.filter((s) => s.id !== id));
-      try {
-        const res = await api.deleteStockMovement(id);
-        await fetchAll();
-        return res?.data ?? true;
-      } catch (err) {
-        setStockMovements(snap);
-        throw err;
-      }
-    });
-
-  // Purchase Orders
-  const normalizePO = (po) => ({
-    ...po,
-    supplierId: po.supplier?.id || po.supplierId || null,
-    supplierName: po.supplier?.name || po.supplierName || null,
-    itemId: po.item?.id || po.itemId || null,
-    itemName: po.item?.name || po.itemName || null,
-    totalAmount: (po.quantity || 0) * (po.price || 0),
+  // ---------- CRUD Helpers (simplified & robust) ----------
+  const createEntity = (setter, apiFn) => async (data) => wrap(async () => {
+    const tempId = `temp-${Date.now()}`;
+    setter((prev) => [...prev, { ...data, id: tempId }]);
+    const res = await apiFn(data);
+    const saved = res?.data ?? res;
+    setter((prev) => prev.map((x) => (x.id === tempId ? saved : x)));
+    await fetchAll();
+    return saved;
   });
 
-  const addPurchaseOrder = (data) =>
-    wrap(async () => {
-      const payload = normalizePO(data);
-      const res = await api.createPurchaseOrder(payload);
+  const updateEntity = (list, setter, apiFn) => async (id, data) => wrap(async () => {
+    const snap = snapshot(list);
+    setter((prev) => prev.map((x) => (x.id === id ? { ...x, ...data } : x)));
+    try {
+      const res = await apiFn(id, data);
       const saved = res?.data ?? res;
+      setter((prev) => prev.map((x) => (x.id === id ? saved : x)));
       await fetchAll();
       return saved;
-    });
+    } catch (err) {
+      setter(snap);
+      throw err;
+    }
+  });
 
-  const editPurchaseOrder = (id, data) =>
-    wrap(async () => {
-      const payload = normalizePO(data);
-      const res = await api.updatePurchaseOrder(id, payload);
-      const saved = res?.data ?? res;
+  const removeEntity = (list, setter, apiFn) => async (id) => wrap(async () => {
+    const snap = snapshot(list);
+    setter((prev) => prev.filter((x) => x.id !== id));
+    try {
+      const res = await apiFn(id);
       await fetchAll();
-      return saved;
-    });
+      return res?.data ?? true;
+    } catch (err) {
+      setter(snap);
+      throw err;
+    }
+  });
 
-  const removePurchaseOrder = (id) =>
-    wrap(async () => {
-      const snap = snapshot(purchaseOrders);
-      setPurchaseOrders((prev) => prev.filter((p) => p.id !== id));
-      try {
-        const res = await api.deletePurchaseOrder(id);
-        await fetchAll();
-        return res?.data ?? true;
-      } catch (err) {
-        setPurchaseOrders(snap);
-        throw err;
-      }
-    });
-
+  // ---------- Exposed Methods ----------
   return (
     <DataContext.Provider
       value={{
@@ -483,35 +175,35 @@ const DataProvider = ({ children }) => {
         reload,
 
         categories,
-        addCategory,
-        editCategory,
-        removeCategory,
+        addCategory: createEntity(setCategories, api.createCategory),
+        editCategory: updateEntity(categories, setCategories, api.updateCategory),
+        removeCategory: removeEntity(categories, setCategories, api.deleteCategory),
 
         suppliers,
-        addSupplier,
-        editSupplier,
-        removeSupplier,
+        addSupplier: createEntity(setSuppliers, api.createSupplier),
+        editSupplier: updateEntity(suppliers, setSuppliers, api.updateSupplier),
+        removeSupplier: removeEntity(suppliers, setSuppliers, api.deleteSupplier),
 
         items,
-        addItem,
-        editItem,
-        removeItem,
+        addItem: createEntity(setItems, api.createItem),
+        editItem: updateEntity(items, setItems, api.updateItem),
+        removeItem: removeEntity(items, setItems, api.deleteItem),
 
         warehouses,
-        addWarehouse,
-        editWarehouse,
-        removeWarehouse,
+        addWarehouse: createEntity(setWarehouses, api.createWarehouse),
+        editWarehouse: updateEntity(warehouses, setWarehouses, api.updateWarehouse),
+        removeWarehouse: removeEntity(warehouses, setWarehouses, api.deleteWarehouse),
 
         purchaseOrders,
-        addPurchaseOrder,
-        editPurchaseOrder,
-        removePurchaseOrder,
+        addPurchaseOrder: createEntity(setPurchaseOrders, api.createPurchaseOrder),
+        editPurchaseOrder: updateEntity(purchaseOrders, setPurchaseOrders, api.updatePurchaseOrder),
+        removePurchaseOrder: removeEntity(purchaseOrders, setPurchaseOrders, api.deletePurchaseOrder),
 
         stock: stockMovements,
         stockMovements,
-        addStockMovement,
-        editStockMovement,
-        removeStockMovement,
+        addStockMovement: createEntity(setStockMovements, api.createStockMovement),
+        editStockMovement: updateEntity(stockMovements, setStockMovements, api.updateStockMovement),
+        removeStockMovement: removeEntity(stockMovements, setStockMovements, api.deleteStockMovement),
       }}
     >
       {children}

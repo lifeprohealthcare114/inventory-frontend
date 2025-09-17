@@ -9,10 +9,15 @@ const ItemModal = ({ show, handleClose, onSave, editItem, categories, suppliers,
     quantity: 0,
     price: 0,
     reorderLevel: 10,
+    minimumStockLevel: null,
     status: "Active",
     categoryId: null,
     supplierId: null,
     warehouseId: null,
+    barcode: "",
+    serialNumber: "",
+    batchNumber: "",
+    expiryDate: "",
   });
 
   useEffect(() => {
@@ -24,10 +29,15 @@ const ItemModal = ({ show, handleClose, onSave, editItem, categories, suppliers,
         quantity: editItem.quantity || 0,
         price: editItem.price || 0,
         reorderLevel: editItem.reorderLevel || 10,
+        minimumStockLevel: editItem.minimumStockLevel ?? editItem.reorderLevel ?? 10,
         status: editItem.status || "Active",
         categoryId: editItem.categoryId || editItem.category?.id || null,
         supplierId: editItem.supplierId || editItem.supplier?.id || null,
         warehouseId: editItem.warehouseId || editItem.warehouse?.id || null,
+        barcode: editItem.barcode || "",
+        serialNumber: editItem.serialNumber || "",
+        batchNumber: editItem.batchNumber || "",
+        expiryDate: editItem.expiryDate || "",
         id: editItem.id,
       });
     } else {
@@ -38,19 +48,24 @@ const ItemModal = ({ show, handleClose, onSave, editItem, categories, suppliers,
         quantity: 0,
         price: 0,
         reorderLevel: 10,
+        minimumStockLevel: null,
         status: "Active",
         categoryId: null,
         supplierId: null,
         warehouseId: null,
+        barcode: "",
+        serialNumber: "",
+        batchNumber: "",
+        expiryDate: "",
       });
     }
-  }, [editItem]);
+  }, [editItem, show]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: name.includes("Id") ? (value ? Number(value) : null) : value,
+      [name]: name.endsWith("Id") ? (value ? Number(value) : null) : (name === "quantity" || name === "price" || name === "reorderLevel" || name === "minimumStockLevel" ? (value === "" ? "" : Number(value)) : value),
     }));
   };
 
@@ -68,9 +83,7 @@ const ItemModal = ({ show, handleClose, onSave, editItem, categories, suppliers,
       handleClose();
 
       // If parent needs new item immediately (like PurchaseOrderModal), return it
-      if (savedItem) {
-        return savedItem;
-      }
+      if (savedItem) return savedItem;
     } catch (err) {
       console.error("Error saving item:", err);
       alert("Failed to save item. Please try again.");
@@ -115,7 +128,7 @@ const ItemModal = ({ show, handleClose, onSave, editItem, categories, suppliers,
                 <Form.Label>Category</Form.Label>
                 <Form.Select
                   name="categoryId"
-                  value={formData.categoryId || ""}
+                  value={formData.categoryId ?? ""}
                   onChange={handleChange}
                 >
                   <option value="">Select Category</option>
@@ -132,7 +145,7 @@ const ItemModal = ({ show, handleClose, onSave, editItem, categories, suppliers,
                 <Form.Label>Supplier</Form.Label>
                 <Form.Select
                   name="supplierId"
-                  value={formData.supplierId || ""}
+                  value={formData.supplierId ?? ""}
                   onChange={handleChange}
                 >
                   <option value="">Select Supplier</option>
@@ -149,7 +162,7 @@ const ItemModal = ({ show, handleClose, onSave, editItem, categories, suppliers,
                 <Form.Label>Warehouse</Form.Label>
                 <Form.Select
                   name="warehouseId"
-                  value={formData.warehouseId || ""}
+                  value={formData.warehouseId ?? ""}
                   onChange={handleChange}
                 >
                   <option value="">Select Warehouse</option>
@@ -175,7 +188,7 @@ const ItemModal = ({ show, handleClose, onSave, editItem, categories, suppliers,
           </Form.Group>
 
           <Row>
-            <Col md={4}>
+            <Col md={3}>
               <Form.Group className="mb-3">
                 <Form.Label>Quantity</Form.Label>
                 <Form.Control
@@ -186,7 +199,7 @@ const ItemModal = ({ show, handleClose, onSave, editItem, categories, suppliers,
                 />
               </Form.Group>
             </Col>
-            <Col md={4}>
+            <Col md={3}>
               <Form.Group className="mb-3">
                 <Form.Label>Unit Price</Form.Label>
                 <Form.Control
@@ -197,7 +210,7 @@ const ItemModal = ({ show, handleClose, onSave, editItem, categories, suppliers,
                 />
               </Form.Group>
             </Col>
-            <Col md={4}>
+            <Col md={3}>
               <Form.Group className="mb-3">
                 <Form.Label>Reorder Level</Form.Label>
                 <Form.Control
@@ -208,19 +221,82 @@ const ItemModal = ({ show, handleClose, onSave, editItem, categories, suppliers,
                 />
               </Form.Group>
             </Col>
+            <Col md={3}>
+              <Form.Group className="mb-3">
+                <Form.Label>Minimum Stock Level</Form.Label>
+                <Form.Control
+                  type="number"
+                  name="minimumStockLevel"
+                  value={formData.minimumStockLevel ?? ""}
+                  onChange={handleChange}
+                />
+                <Form.Text className="text-muted">Optional — used for low-stock alerts. If blank, Reorder Level is used.</Form.Text>
+              </Form.Group>
+            </Col>
           </Row>
 
-          <Form.Group className="mb-3">
-            <Form.Label>Status</Form.Label>
-            <Form.Select
-              name="status"
-              value={formData.status}
-              onChange={handleChange}
-            >
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </Form.Select>
-          </Form.Group>
+          <Row>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Barcode</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="barcode"
+                  value={formData.barcode}
+                  onChange={handleChange}
+                />
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Serial Number</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="serialNumber"
+                  value={formData.serialNumber}
+                  onChange={handleChange}
+                />
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Batch Number</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="batchNumber"
+                  value={formData.batchNumber}
+                  onChange={handleChange}
+                />
+              </Form.Group>
+            </Col>
+          </Row>
+
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Expiry Date</Form.Label>
+                <Form.Control
+                  type="date"
+                  name="expiryDate"
+                  value={formData.expiryDate || ""}
+                  onChange={handleChange}
+                />
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Status</Form.Label>
+                <Form.Select
+                  name="status"
+                  value={formData.status}
+                  onChange={handleChange}
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </Form.Select>
+              </Form.Group>
+            </Col>
+          </Row>
         </Form>
       </Modal.Body>
       <Modal.Footer>

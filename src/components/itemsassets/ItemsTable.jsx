@@ -1,7 +1,21 @@
 import React from "react";
 import { Table, Button } from "react-bootstrap";
 
+/**
+ * Shows items and highlights low/warning stock rows.
+ * Supports either minimumStockLevel or reorderLevel (fallback).
+ */
 const ItemsTable = ({ items, onEdit, onDelete, categories, suppliers, warehouses }) => {
+  const getMinLevel = (i) => i.minimumStockLevel ?? i.reorderLevel ?? 0;
+
+  const rowClass = (i) => {
+    const stock = Number(i.quantity || 0);
+    const min = Number(getMinLevel(i));
+    if (stock <= min) return "table-danger";
+    if (stock <= Math.ceil(min * 1.5)) return "table-warning";
+    return "";
+  };
+
   return (
     <div className="card p-3">
       <h5>Items Management</h5>
@@ -17,6 +31,7 @@ const ItemsTable = ({ items, onEdit, onDelete, categories, suppliers, warehouses
             <th>Unit Price</th>
             <th>Last Purchase Price</th>
             <th>Reorder Level</th>
+            <th>Min Stock</th>
             <th>Status</th>
             <th>Total Value</th>
             <th>Barcode</th>
@@ -28,7 +43,7 @@ const ItemsTable = ({ items, onEdit, onDelete, categories, suppliers, warehouses
         </thead>
         <tbody>
           {items.map((i) => (
-            <tr key={i.id}>
+            <tr key={i.id} className={rowClass(i)}>
               <td>{i.itemCode}</td>
               <td>{i.name}</td>
               <td>{categories.find(c => c.id === i.categoryId)?.name || "-"}</td>
@@ -36,25 +51,26 @@ const ItemsTable = ({ items, onEdit, onDelete, categories, suppliers, warehouses
               <td>{suppliers.find(s => s.id === i.supplierId)?.name || "-"}</td>
               <td>{i.quantity}</td>
               <td>
-                {i.price.toLocaleString("en-IN", { style: "currency", currency: "INR" })}
+                {(Number(i.price || 0)).toLocaleString("en-IN", { style: "currency", currency: "INR" })}
               </td>
               <td>
                 {i.lastPurchasePrice
-                  ? i.lastPurchasePrice.toLocaleString("en-IN", { style: "currency", currency: "INR" })
+                  ? Number(i.lastPurchasePrice).toLocaleString("en-IN", { style: "currency", currency: "INR" })
                   : "-"}
               </td>
-              <td>{i.reorderLevel}</td>
+              <td>{i.reorderLevel ?? "-"}</td>
+              <td>{i.minimumStockLevel ?? i.reorderLevel ?? "-"}</td>
               <td>
                 <span className={`badge ${i.status === "Active" ? "bg-success" : "bg-secondary"}`}>
                   {i.status}
                 </span>
               </td>
               <td>
-                {(i.quantity * i.price).toLocaleString("en-IN", { style: "currency", currency: "INR" })}
+                {(Number(i.quantity || 0) * Number(i.price || 0)).toLocaleString("en-IN", { style: "currency", currency: "INR" })}
               </td>
-              <td>{i.barcode}</td>
-              <td>{i.serialNumber}</td>
-              <td>{i.batchNumber}</td>
+              <td>{i.barcode || "-"}</td>
+              <td>{i.serialNumber || "-"}</td>
+              <td>{i.batchNumber || "-"}</td>
               <td>{i.expiryDate || "-"}</td>
               <td>
                 <Button
