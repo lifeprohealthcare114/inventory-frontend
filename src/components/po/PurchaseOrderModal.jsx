@@ -11,13 +11,7 @@ const generatePONumber = () => {
 };
 
 export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
-  const {
-    suppliers = [],
-    items = [],
-    categories = [],
-    warehouses = [],
-    addItem,
-  } = useDataContext();
+  const { suppliers = [], items = [], categories = [], warehouses = [], addItem } = useDataContext();
 
   const [formData, setFormData] = useState({
     poNumber: "",
@@ -38,14 +32,9 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
 
   useEffect(() => {
     if (order) {
-      const matchedSupplier =
-        suppliers.find((s) => s.id === order.supplierId) || null;
+      const matchedSupplier = suppliers.find((s) => s.id === order.supplierId) || null;
       const matchedItem = order.itemId
-        ? items.find((it) => it.id === order.itemId) || {
-            id: order.itemId,
-            name: order.itemName,
-            itemCode: "",
-          }
+        ? items.find((it) => it.id === order.itemId) || { id: order.itemId, name: order.itemName, itemCode: "" }
         : null;
 
       setFormData({
@@ -54,6 +43,8 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
         item: matchedItem,
         quantity: Number(order.quantity) || 0,
         price: Number(order.price) || 0,
+        orderDate: order.orderDate || new Date().toISOString().split("T")[0],
+        expectedDate: order.expectedDate || "-",
       });
     } else {
       setFormData({
@@ -63,7 +54,7 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
         quantity: 0,
         price: 0,
         orderDate: new Date().toISOString().split("T")[0],
-        expectedDate: "",
+        expectedDate: "-",
         status: "Draft",
         notes: "",
       });
@@ -112,7 +103,6 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
       return;
     }
 
-    // Save newly created item if needed
     if (!formData.item.id && editingItem) {
       const saved = await handleSaveItem(editingItem);
       if (!saved?.id) return;
@@ -129,7 +119,7 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
       price: formData.price,
       totalAmount,
       orderDate: formData.orderDate,
-      expectedDate: formData.expectedDate,
+      expectedDate: formData.expectedDate === "-" ? "" : formData.expectedDate,
       status: formData.status,
       notes: formData.notes,
     };
@@ -138,9 +128,7 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
       await onSave(payload);
     } catch (err) {
       console.error(err);
-      setErrorMsg(
-        err?.response?.data?.message || "❌ Failed to save purchase order."
-      );
+      setErrorMsg(err?.response?.data?.message || "❌ Failed to save purchase order.");
     }
   };
 
@@ -150,13 +138,12 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
     <>
       <Modal show={show} onHide={onHide} centered size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>
-            {order ? "Edit Purchase Order" : "Add Purchase Order"}
-          </Modal.Title>
+          <Modal.Title>{order ? "Edit Purchase Order" : "Add Purchase Order"}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {errorMsg && <Alert variant="danger">{errorMsg}</Alert>}
           <Form onSubmit={handleSubmit}>
+            {/* PO Number */}
             <Form.Group className="mb-3">
               <Form.Label>PO Number</Form.Label>
               <Form.Control
@@ -168,19 +155,15 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
               />
             </Form.Group>
 
+            {/* Supplier */}
             <Form.Group className="mb-3">
               <Form.Label>Supplier</Form.Label>
               <Form.Select
                 name="supplier"
                 value={formData.supplier?.id || ""}
                 onChange={(e) => {
-                  const selectedSupplier = suppliers.find(
-                    (s) => s.id.toString() === e.target.value
-                  );
-                  setFormData((prev) => ({
-                    ...prev,
-                    supplier: selectedSupplier || null,
-                  }));
+                  const selectedSupplier = suppliers.find((s) => s.id.toString() === e.target.value);
+                  setFormData((prev) => ({ ...prev, supplier: selectedSupplier || null }));
                 }}
                 required
               >
@@ -193,33 +176,20 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
               </Form.Select>
             </Form.Group>
 
+            {/* Item */}
             <Form.Group className="mb-3">
               <Form.Label>Item</Form.Label>
               <CreatableSelect
-                options={items.map((it) => ({
-                  value: it.id,
-                  label: `${it.name} (${it.itemCode})`,
-                }))}
+                options={items.map((it) => ({ value: it.id, label: `${it.name} (${it.itemCode})` }))}
                 value={
                   formData.item
-                    ? {
-                        value: formData.item.id,
-                        label: `${formData.item.name} (${
-                          formData.item.itemCode || ""
-                        })`,
-                      }
+                    ? { value: formData.item.id, label: `${formData.item.name} (${formData.item.itemCode || ""})` }
                     : null
                 }
                 onChange={(selected) => {
-                  if (!selected)
-                    return setFormData((prev) => ({ ...prev, item: null }));
-                  const selectedItem = items.find(
-                    (it) => it.id === selected.value
-                  );
-                  setFormData((prev) => ({
-                    ...prev,
-                    item: selectedItem || null,
-                  }));
+                  if (!selected) return setFormData((prev) => ({ ...prev, item: null }));
+                  const selectedItem = items.find((it) => it.id === selected.value);
+                  setFormData((prev) => ({ ...prev, item: selectedItem || null }));
                 }}
                 onCreateOption={(inputValue) => {
                   setEditingItem({
@@ -242,29 +212,18 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
               />
             </Form.Group>
 
+            {/* Quantity, Price, Total */}
             <Row>
               <Col md={4}>
                 <Form.Group className="mb-3">
                   <Form.Label>Quantity</Form.Label>
-                  <Form.Control
-                    type="number"
-                    name="quantity"
-                    value={formData.quantity}
-                    onChange={handleChange}
-                    required
-                  />
+                  <Form.Control type="number" name="quantity" value={formData.quantity} onChange={handleChange} required />
                 </Form.Group>
               </Col>
               <Col md={4}>
                 <Form.Group className="mb-3">
                   <Form.Label>Price</Form.Label>
-                  <Form.Control
-                    type="number"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleChange}
-                    required
-                  />
+                  <Form.Control type="number" name="price" value={formData.price} onChange={handleChange} required />
                 </Form.Group>
               </Col>
               <Col md={4}>
@@ -275,39 +234,26 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
               </Col>
             </Row>
 
+            {/* Order Date & Expected Date */}
             <Row>
               <Col md={6}>
                 <Form.Group className="mb-3">
                   <Form.Label>Order Date</Form.Label>
-                  <Form.Control
-                    type="date"
-                    name="orderDate"
-                    value={formData.orderDate}
-                    onChange={handleChange}
-                    required
-                  />
+                  <Form.Control type="date" name="orderDate" value={formData.orderDate} onChange={handleChange} required />
                 </Form.Group>
               </Col>
               <Col md={6}>
                 <Form.Group className="mb-3">
                   <Form.Label>Expected Delivery Date</Form.Label>
-                  <Form.Control
-                    type="date"
-                    name="expectedDate"
-                    value={formData.expectedDate}
-                    onChange={handleChange}
-                  />
+                  <Form.Control type="date" name="expectedDate" value={formData.expectedDate === "-" ? "" : formData.expectedDate} onChange={handleChange} />
                 </Form.Group>
               </Col>
             </Row>
 
+            {/* Status & Notes */}
             <Form.Group className="mb-3">
               <Form.Label>Status</Form.Label>
-              <Form.Select
-                name="status"
-                value={formData.status}
-                onChange={handleChange}
-              >
+              <Form.Select name="status" value={formData.status} onChange={handleChange}>
                 <option>Draft</option>
                 <option>Pending</option>
                 <option>Approved</option>
@@ -318,42 +264,22 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
 
             <Form.Group className="mb-3">
               <Form.Label>Notes</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={2}
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                placeholder="Any additional details"
-              />
+              <Form.Control as="textarea" rows={2} name="notes" value={formData.notes} onChange={handleChange} placeholder="Any additional details" />
             </Form.Group>
 
             <div className="text-end">
-              <Button
-                variant="secondary"
-                onClick={onHide}
-                className="me-2"
-                disabled={savingItem}
-              >
+              <Button variant="secondary" onClick={onHide} className="me-2" disabled={savingItem}>
                 Cancel
               </Button>
               <Button variant="primary" type="submit" disabled={savingItem}>
-                {savingItem ? (
-                  <>
-                    <Spinner animation="border" size="sm" className="me-2" />
-                    Saving Item...
-                  </>
-                ) : order ? (
-                  "Update"
-                ) : (
-                  "Add"
-                )}
+                {savingItem ? <><Spinner animation="border" size="sm" className="me-2" />Saving Item...</> : order ? "Update" : "Add"}
               </Button>
             </div>
           </Form>
         </Modal.Body>
       </Modal>
 
+      {/* Item Modal */}
       {showItemModal && (
         <ItemModal
           show={showItemModal}
@@ -363,9 +289,9 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
           }}
           editItem={editingItem}
           onSave={handleSaveItem}
-          categories={categories}   
+          categories={categories}
           suppliers={suppliers}
-          warehouses={warehouses}  
+          warehouses={warehouses}
         />
       )}
     </>

@@ -45,23 +45,32 @@ const DataProvider = ({ children }) => {
   const getPrice = (i) => i?.price ?? i?.cost ?? 0;
 
   // ---------- Enrichers ----------
-  const enrichCategories = useCallback((categoriesList, itemsList) =>
-    categoriesList.map((c) => {
-      const relatedItems = itemsList.filter((i) => i.categoryId === c.id);
-      const itemsCount = relatedItems.length;
-      const lowStock = relatedItems.filter((i) => getQty(i) < LOW_STOCK_THRESHOLD).length;
-      const totalValue = relatedItems.reduce((sum, i) => sum + getQty(i) * getPrice(i), 0);
-      return { ...c, itemsCount, lowStock, totalValue };
-    }), []);
+  const enrichCategories = useCallback(
+    (categoriesList, itemsList) =>
+      categoriesList.map((c) => {
+        const relatedItems = itemsList.filter((i) => i.categoryId === c.id);
+        const itemsCount = relatedItems.length;
+        const lowStock = relatedItems.filter((i) => getQty(i) < LOW_STOCK_THRESHOLD).length;
+        const totalValue = relatedItems.reduce((sum, i) => sum + getQty(i) * getPrice(i), 0);
+        return { ...c, itemsCount, lowStock, totalValue };
+      }),
+    []
+  );
 
-  const enrichWarehouses = useCallback((warehousesList, itemsList) =>
-    warehousesList.map((w) => {
-      const relatedItems = itemsList.filter((i) => i.warehouseId === w.id);
-      const itemsCount = relatedItems.length;
-      const value = relatedItems.reduce((sum, i) => sum + getQty(i) * getPrice(i), 0);
-      const associatedItems = relatedItems.map((i) => i.name || i.itemName || i.code || "").filter(Boolean).join(", ");
-      return { ...w, itemsCount, value, associatedItems };
-    }), []);
+  const enrichWarehouses = useCallback(
+    (warehousesList, itemsList) =>
+      warehousesList.map((w) => {
+        const relatedItems = itemsList.filter((i) => i.warehouseId === w.id);
+        const itemsCount = relatedItems.length;
+        const value = relatedItems.reduce((sum, i) => sum + getQty(i) * getPrice(i), 0);
+        const associatedItems = relatedItems
+          .map((i) => i.name || i.itemName || i.code || "")
+          .filter(Boolean)
+          .join(", ");
+        return { ...w, itemsCount, value, associatedItems };
+      }),
+    []
+  );
 
   // ---------- Safe Fetch ----------
   const safeFetch = useCallback(async (fetchFn, setter) => {
@@ -110,60 +119,78 @@ const DataProvider = ({ children }) => {
         fetchStockMovementsData(),
       ]);
 
-      const [catRes, supRes, itemRes, whRes] = results.map((r) => (r.status === "fulfilled" ? r.value : []));
+      const fulfilledResults = results.map((r) => (r.status === "fulfilled" ? r.value : []));
+
+      const catRes = fulfilledResults[0];
+      const itemRes = fulfilledResults[2];
+      const whRes = fulfilledResults[3];
+
       setItems(itemRes);
       setCategories(enrichCategories(catRes, itemRes));
       setWarehouses(enrichWarehouses(whRes, itemRes));
-      setLoading(false);
-      return results;
     } catch (err) {
       handleError(err);
+    } finally {
       setLoading(false);
-      return [];
     }
-  }, [fetchCategoriesData, fetchSuppliersData, fetchItemsData, fetchWarehousesData, fetchPurchaseOrdersData, fetchStockMovementsData, enrichCategories, enrichWarehouses]);
+  }, [
+    fetchCategoriesData,
+    fetchSuppliersData,
+    fetchItemsData,
+    fetchWarehousesData,
+    fetchPurchaseOrdersData,
+    fetchStockMovementsData,
+    enrichCategories,
+    enrichWarehouses,
+  ]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
+
   const reload = fetchAll;
 
-  // ---------- CRUD Helpers (simplified & robust) ----------
-  const createEntity = (setter, apiFn) => async (data) => wrap(async () => {
-    const tempId = `temp-${Date.now()}`;
-    setter((prev) => [...prev, { ...data, id: tempId }]);
-    const res = await apiFn(data);
-    const saved = res?.data ?? res;
-    setter((prev) => prev.map((x) => (x.id === tempId ? saved : x)));
-    await fetchAll();
-    return saved;
-  });
-
-  const updateEntity = (list, setter, apiFn) => async (id, data) => wrap(async () => {
-    const snap = snapshot(list);
-    setter((prev) => prev.map((x) => (x.id === id ? { ...x, ...data } : x)));
-    try {
-      const res = await apiFn(id, data);
+  // ---------- CRUD Helpers ----------
+  const createEntity = (setter, apiFn) => async (data) =>
+    wrap(async () => {
+      const tempId = `temp-${Date.now()}`;
+      setter((prev) => [...prev, { ...data, id: tempId }]);
+      const res = await apiFn(data);
       const saved = res?.data ?? res;
-      setter((prev) => prev.map((x) => (x.id === id ? saved : x)));
+      setter((prev) => prev.map((x) => (x.id === tempId ? saved : x)));
       await fetchAll();
       return saved;
-    } catch (err) {
-      setter(snap);
-      throw err;
-    }
-  });
+    });
 
-  const removeEntity = (list, setter, apiFn) => async (id) => wrap(async () => {
-    const snap = snapshot(list);
-    setter((prev) => prev.filter((x) => x.id !== id));
-    try {
-      const res = await apiFn(id);
-      await fetchAll();
-      return res?.data ?? true;
-    } catch (err) {
-      setter(snap);
-      throw err;
-    }
-  });
+  const updateEntity = (list, setter, apiFn) => async (id, data) =>
+    wrap(async () => {
+      const snap = snapshot(list);
+      setter((prev) => prev.map((x) => (x.id === id ? { ...x, ...data } : x)));
+      try {
+        const res = await apiFn(id, data);
+        const saved = res?.data ?? res;
+        setter((prev) => prev.map((x) => (x.id === id ? saved : x)));
+        await fetchAll();
+        return saved;
+      } catch (err) {
+        setter(snap);
+        throw err;
+      }
+    });
+
+  const removeEntity = (list, setter, apiFn) => async (id) =>
+    wrap(async () => {
+      const snap = snapshot(list);
+      setter((prev) => prev.filter((x) => x.id !== id));
+      try {
+        const res = await apiFn(id);
+        await fetchAll();
+        return res?.data ?? true;
+      } catch (err) {
+        setter(snap);
+        throw err;
+      }
+    });
 
   // ---------- Exposed Methods ----------
   return (

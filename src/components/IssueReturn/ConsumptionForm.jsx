@@ -1,44 +1,53 @@
+// src/components/StockOperations/ConsumptionForm.jsx
 import React, { useEffect, useState } from "react";
 import { Modal, Button, Form, Row, Col } from "react-bootstrap";
-import { fetchItems, fetchWarehouses, createIssue } from "../../api/api";
+import { fetchItems, fetchWarehouses, createConsumption } from "../../api/api";
 
-export default function IssueForm({ show, onClose, onSaved }) {
+export default function ConsumptionForm({ show, onClose, onSaved }) {
   const [items, setItems] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
-  const [form, setForm] = useState({
-    itemId: "",
-    warehouseId: "",
-    person: "",
-    department: "",
-    purpose: "",
-    quantity: 1,
-  });
+  const [form, setForm] = useState(initialForm());
 
+  function initialForm() {
+    return {
+      itemId: "",
+      warehouseId: "",
+      quantity: 1,
+      person: "",
+      department: "",
+      purpose: "",
+    };
+  }
+
+  // Load items & warehouses when modal opens
   useEffect(() => {
     if (show) {
-      fetchItems().then((r) => setItems(r.data || [])).catch(console.error);
-      fetchWarehouses().then((r) => setWarehouses(r.data || [])).catch(console.error);
+      fetchItems().then(r => setItems(r.data || [])).catch(console.error);
+      fetchWarehouses().then(r => setWarehouses(r.data || [])).catch(console.error);
     }
   }, [show]);
 
-  const onChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const onChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
 
   const submit = async () => {
     try {
-      await createIssue(form);
-      onSaved && onSaved();
+      await createConsumption(form);
+      if (onSaved) onSaved();
+      setForm(initialForm());
       onClose();
     } catch (err) {
-      console.error(err);
-      alert("Failed to issue item");
+      console.error("Error logging consumption", err);
+      alert("Failed to log consumption. Please try again.");
     }
   };
 
   return (
     <Modal show={show} onHide={onClose} centered>
       <Modal.Header closeButton>
-        <Modal.Title>New Item Issue</Modal.Title>
+        <Modal.Title>Log Consumption / Usage</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <Form>
@@ -46,37 +55,27 @@ export default function IssueForm({ show, onClose, onSaved }) {
             <Col md={12}>
               <Form.Group>
                 <Form.Label>Item</Form.Label>
-                <Form.Select
-                  name="itemId"
-                  value={form.itemId}
-                  onChange={onChange}
-                >
+                <Form.Select name="itemId" value={form.itemId} onChange={onChange}>
                   <option value="">Select item</option>
-                  {items.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.name}
-                    </option>
+                  {items.map(i => (
+                    <option key={i.id} value={i.id}>{i.name}</option>
                   ))}
                 </Form.Select>
               </Form.Group>
             </Col>
+
             <Col md={12}>
               <Form.Group>
                 <Form.Label>Warehouse</Form.Label>
-                <Form.Select
-                  name="warehouseId"
-                  value={form.warehouseId}
-                  onChange={onChange}
-                >
+                <Form.Select name="warehouseId" value={form.warehouseId} onChange={onChange}>
                   <option value="">Select warehouse</option>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
+                  {warehouses.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
                 </Form.Select>
               </Form.Group>
             </Col>
+
             <Col md={6}>
               <Form.Group>
                 <Form.Label>Quantity</Form.Label>
@@ -85,9 +84,11 @@ export default function IssueForm({ show, onClose, onSaved }) {
                   name="quantity"
                   value={form.quantity}
                   onChange={onChange}
+                  min="1"
                 />
               </Form.Group>
             </Col>
+
             <Col md={6}>
               <Form.Group>
                 <Form.Label>Person</Form.Label>
@@ -98,6 +99,7 @@ export default function IssueForm({ show, onClose, onSaved }) {
                 />
               </Form.Group>
             </Col>
+
             <Col md={6}>
               <Form.Group>
                 <Form.Label>Department</Form.Label>
@@ -108,6 +110,7 @@ export default function IssueForm({ show, onClose, onSaved }) {
                 />
               </Form.Group>
             </Col>
+
             <Col md={12}>
               <Form.Group>
                 <Form.Label>Purpose</Form.Label>
@@ -123,13 +126,11 @@ export default function IssueForm({ show, onClose, onSaved }) {
         </Form>
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onClose}>
-          Cancel
-        </Button>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
         <Button
           variant="primary"
           onClick={submit}
-          disabled={!form.itemId || !form.person}
+          disabled={!form.itemId || !form.person || !form.quantity}
         >
           Save
         </Button>

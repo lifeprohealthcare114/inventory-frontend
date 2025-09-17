@@ -93,5 +93,9 @@ export const fetchIssues = () => api.get("/issues");
 export const createIssue = data => api.post("/issues", stripId(data));
 export const markIssueReturned = (id, data) => api.post(`/issues/${id}/return`, data);
 
+// ---------------------- Consumption ----------------------
+export const fetchConsumptions = () => api.get("/consumptions");
+export const createConsumption = data => api.post("/consumptions", stripId(data));
+
 // ---------------------- Export Axios instance (optional) ----------------------
 export default api;

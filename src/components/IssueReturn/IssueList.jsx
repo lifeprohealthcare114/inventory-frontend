@@ -1,51 +1,64 @@
+// src/components/IssueReturn/IssueList.jsx
 import React, { useEffect, useState, useCallback } from "react";
 import { Table, Button, Form, Row, Col } from "react-bootstrap";
 import { fetchIssues, markIssueReturned } from "../../api/api";
 import IssueForm from "./IssueForm";
+import { useDataContext } from "../../context/DataContext";
 
 export default function IssueList() {
+  const { reload } = useDataContext(); // Only use what’s needed
+
   const [issues, setIssues] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [showForm, setShowForm] = useState(false);
 
-  // Filters
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
   const load = useCallback(() => {
     fetchIssues()
-      .then(r => {
-        setIssues(r.data);
-        setFiltered(r.data);
+      .then((r) => {
+        const data = Array.isArray(r.data) ? r.data : [];
+        setIssues(data);
+        setFiltered(data);
       })
       .catch(console.error);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  // Apply filters whenever search/status/issue list changes
+  // Apply filters
   useEffect(() => {
     let data = issues;
 
     if (search) {
       const s = search.toLowerCase();
-      data = data.filter(i =>
-        (i.person && i.person.toLowerCase().includes(s)) ||
-        (i.department && i.department.toLowerCase().includes(s)) ||
-        (i.purpose && i.purpose.toLowerCase().includes(s))
+      data = data.filter(
+        (i) =>
+          (i.person && i.person.toLowerCase().includes(s)) ||
+          (i.department && i.department.toLowerCase().includes(s)) ||
+          (i.purpose && i.purpose.toLowerCase().includes(s))
       );
     }
 
     if (statusFilter) {
-      data = data.filter(i => i.status === statusFilter);
+      data = data.filter((i) => i.status === statusFilter);
     }
 
     setFiltered(data);
   }, [search, statusFilter, issues]);
 
   const onReturn = async (id) => {
-    await markIssueReturned(id);
-    load();
+    try {
+      await markIssueReturned(id);
+      load();
+      reload(); // Refresh global state if needed
+    } catch (err) {
+      console.error(err);
+      alert("Failed to mark item as returned.");
+    }
   };
 
   return (
@@ -55,7 +68,6 @@ export default function IssueList() {
         <Button onClick={() => setShowForm(true)}>New Issue</Button>
       </div>
 
-      {/* Search & Filters */}
       <Row className="mb-3">
         <Col md={6}>
           <Form.Control
@@ -65,7 +77,10 @@ export default function IssueList() {
           />
         </Col>
         <Col md={3}>
-          <Form.Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <Form.Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
             <option value="">All Status</option>
             <option value="ISSUED">Issued</option>
             <option value="RETURNED">Returned</option>
@@ -73,7 +88,7 @@ export default function IssueList() {
         </Col>
       </Row>
 
-      <Table striped bordered hover>
+      <Table striped bordered hover responsive>
         <thead>
           <tr>
             <th>Date Issued</th>
@@ -88,9 +103,9 @@ export default function IssueList() {
           </tr>
         </thead>
         <tbody>
-          {filtered.map(i => (
+          {filtered.map((i) => (
             <tr key={i.id}>
-              <td>{new Date(i.issueDate).toLocaleDateString()}</td>
+              <td>{i.issueDate ? new Date(i.issueDate).toLocaleDateString() : "-"}</td>
               <td>{i.itemName}</td>
               <td>{i.quantity}</td>
               <td>{i.person}</td>
@@ -103,10 +118,14 @@ export default function IssueList() {
                   <span className="badge bg-success">Returned</span>
                 )}
               </td>
-              <td>{i.returnDate ? new Date(i.returnDate).toLocaleDateString() : "-"}</td>
+              <td>
+                {i.returnDate ? new Date(i.returnDate).toLocaleDateString() : "-"}
+              </td>
               <td>
                 {i.status === "ISSUED" ? (
-                  <Button size="sm" onClick={() => onReturn(i.id)}>Mark Returned</Button>
+                  <Button size="sm" onClick={() => onReturn(i.id)}>
+                    Mark Returned
+                  </Button>
                 ) : (
                   <span className="text-success fw-bold">Returned</span>
                 )}
@@ -116,7 +135,11 @@ export default function IssueList() {
         </tbody>
       </Table>
 
-      <IssueForm show={showForm} onClose={() => setShowForm(false)} onSaved={load} />
+      <IssueForm
+        show={showForm}
+        onClose={() => setShowForm(false)}
+        onSaved={load}
+      />
     </div>
   );
 }

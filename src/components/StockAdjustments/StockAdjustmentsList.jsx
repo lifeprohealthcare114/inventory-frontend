@@ -2,7 +2,11 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Table, Button, Badge, Spinner, Alert } from "react-bootstrap";
 import StockAdjustmentForm from "./StockAdjustmentsForm";
-import { fetchStockAdjustments, approveStockAdjustment, rejectStockAdjustment } from "../../api/api";
+import {
+  fetchStockAdjustments,
+  approveStockAdjustment,
+  rejectStockAdjustment,
+} from "../../api/api";
 
 export default function StockAdjustmentList({ currentUser }) {
   const [adjustments, setAdjustments] = useState([]);
@@ -105,7 +109,7 @@ export default function StockAdjustmentList({ currentUser }) {
                   </Badge>
                 </td>
                 <td>
-                  {a.status === "PENDING" && (
+                  {a.status === "PENDING" ? (
                     <>
                       <Button
                         size="sm"
@@ -123,6 +127,13 @@ export default function StockAdjustmentList({ currentUser }) {
                         Reject
                       </Button>
                     </>
+                  ) : (
+                    <Badge
+                      bg={a.status === "APPROVED" ? "success" : "danger"}
+                      className="p-2"
+                    >
+                      {a.status === "APPROVED" ? "✅ Approved" : "❌ Rejected"}
+                    </Badge>
                   )}
                 </td>
               </tr>

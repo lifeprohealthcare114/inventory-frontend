@@ -21,7 +21,7 @@ export default function Sidebar() {
         <NavLink to="/stock-movements" className="nav-link">Stock Movements</NavLink>
         <NavLink to="/stock-adjustments" className="nav-link">Stock Adjustments</NavLink>
         <NavLink to="/alerts/low-stock" className="nav-link">Low Stock Alerts</NavLink>
-        <NavLink to="/issue-return" className="nav-link">Item Issue & Return</NavLink>
+        <NavLink to="/issue-consumption" className="nav-link">Issue & Consumption</NavLink>
       </nav>
     </div>
   );

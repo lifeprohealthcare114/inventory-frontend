@@ -1,7 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { Table, Form, Row, Col, Button, InputGroup, Spinner, Alert } from 'react-bootstrap';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Table, Form, Row, Col, Button, InputGroup, Spinner, Alert, Badge } from 'react-bootstrap';
 import { fetchStockMovements, fetchItems } from '../../api/api';
 import StockMovementModal from './StockMovementModal';
+
+const typeLabels = {
+  IN: { label: "Stock In", variant: "success" },
+  OUT: { label: "Stock Out", variant: "danger" },
+  ADJUST: { label: "Adjustment", variant: "primary" },
+  CONSUMPTION: { label: "Consumption", variant: "warning" },
+  PRODUCTION: { label: "Production", variant: "info" }
+};
 
 export default function StockMovementList() {
   const [movements, setMovements] = useState([]);
@@ -12,19 +20,19 @@ export default function StockMovementList() {
   const [selectedId, setSelectedId] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
-  // Load items
+  // Load items (for dropdown)
   useEffect(() => {
     fetchItems()
       .then(r => setItems(Array.isArray(r?.data) ? r.data : []))
       .catch(() => setItems([]));
   }, []);
 
-  const load = async () => {
+  // Load stock movements
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
 
-      // Convert date filters to ISO for backend
       const params = { ...filters };
       if (filters.from) params.from = filters.from + 'T00:00:00';
       if (filters.to) params.to = filters.to + 'T23:59:59';
@@ -38,12 +46,16 @@ export default function StockMovementList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
 
-  useEffect(() => { load(); }, []);
+  // Run on mount and when filters change
+  useEffect(() => { load(); }, [load]);
 
   const onFilterChange = e => setFilters({ ...filters, [e.target.name]: e.target.value });
-  const resetFilters = () => { setFilters({ itemId: '', type: '', from: '', to: '' }); setTimeout(load, 0); };
+  const resetFilters = () => {
+    setFilters({ itemId: '', type: '', from: '', to: '' });
+    setTimeout(load, 0);
+  };
 
   return (
     <div>
@@ -64,6 +76,8 @@ export default function StockMovementList() {
               <option value="IN">IN</option>
               <option value="OUT">OUT</option>
               <option value="ADJUST">ADJUST</option>
+              <option value="CONSUMPTION">CONSUMPTION</option>
+              <option value="PRODUCTION">PRODUCTION</option>
             </Form.Select>
           </Col>
           <Col md={2}>
@@ -108,20 +122,23 @@ export default function StockMovementList() {
               <td colSpan={8} className="text-center">No records found.</td>
             </tr>
           )}
-          {!loading && movements.map(m => (
-            <tr key={m.id}>
-              <td>{m.date ? new Date(m.date).toLocaleString() : 'N/A'}</td>
-              <td>{m.itemName || 'N/A'}</td>
-              <td>{m.warehouseName || 'N/A'}</td>
-              <td>{m.quantity ?? 0}</td>
-              <td>{m.type || 'N/A'}</td>
-              <td>{m.userName || 'N/A'}</td>
-              <td>{m.reference || '-'}</td>
-              <td>
-                <Button size="sm" onClick={() => { setSelectedId(m.id); setShowModal(true); }}>View</Button>
-              </td>
-            </tr>
-          ))}
+          {!loading && movements.map(m => {
+            const typeInfo = typeLabels[m.type] || { label: m.type, variant: "secondary" };
+            return (
+              <tr key={m.id}>
+                <td>{m.date ? new Date(m.date).toLocaleString() : 'N/A'}</td>
+                <td>{m.itemName || 'N/A'}</td>
+                <td>{m.warehouseName || 'N/A'}</td>
+                <td>{m.quantity ?? 0}</td>
+                <td><Badge bg={typeInfo.variant}>{typeInfo.label}</Badge></td>
+                <td>{m.userName || 'N/A'}</td>
+                <td>{m.reference || '-'}</td>
+                <td>
+                  <Button size="sm" onClick={() => { setSelectedId(m.id); setShowModal(true); }}>View</Button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </Table>
 

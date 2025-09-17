@@ -6,7 +6,7 @@ import Dashboard from "./components/Dashboard";
 import ItemsAssets from "./components/itemsassets/ItemsAssets";
 import Categories from "./components/categories/Categories";
 import Warehouses from "./components/warehouses/Warehouses";
-import PurchaseOrders from "./components/po/PurchaseOrders"; 
+import PurchaseOrders from "./components/po/PurchaseOrders";
 import Supplier from "./components/supplier/Supplier";
 import DataProvider from "./context/DataContext";
 import { ToastContainer } from "react-toastify";
@@ -20,9 +20,10 @@ import StockAdjustmentForm from "./components/StockAdjustments/StockAdjustmentsF
 import LowStockList from "./components/Alerts/LowStockList";
 import ReorderModal from "./components/Alerts/ReorderModal";
 
-// 🔹 NEW Issuance & Return imports
-import IssueList from "./components/IssueReturn/IssueList";
+// 🔹 Issuance & Consumption (Tabs)
+import IssueReturnConsumptionTabs from "./components/IssueReturn/IssueReturnConsumptionTabs";
 import IssueForm from "./components/IssueReturn/IssueForm";
+import ConsumptionForm from "./components/IssueReturn/ConsumptionForm";
 
 export default function App() {
   return (
@@ -43,7 +44,7 @@ export default function App() {
                 <Route path="/items" element={<ItemsAssets />} />
                 <Route path="/categories" element={<Categories />} />
                 <Route path="/warehouses" element={<Warehouses />} />
-                <Route path="/purchase-orders" element={<PurchaseOrders />} /> 
+                <Route path="/purchase-orders" element={<PurchaseOrders />} />
                 <Route path="/suppliers" element={<Supplier />} />
 
                 {/* 🔹 Stock Movement */}
@@ -59,23 +60,24 @@ export default function App() {
                 <Route path="/alerts/low-stock" element={<LowStockList />} />
                 <Route path="/alerts/reorder" element={<ReorderModal />} />
 
-                {/* 🔹 Issuance & Return */}
-                <Route path="/issue-return" element={<IssueList />} />
-                <Route path="/issue-return/new" element={<IssueForm />} />
+                {/* 🔹 Issuance & Consumption Tabs */}
+                <Route path="/issue-consumption" element={<IssueReturnConsumptionTabs />} />
+                <Route path="/issue-consumption/issue/new" element={<IssueForm />} />
+                <Route path="/issue-consumption/consumption/new" element={<ConsumptionForm />} />
               </Routes>
             </div>
 
             {/* Global toast notifications */}
-            <ToastContainer 
-              position="top-right" 
-              autoClose={3000} 
-              hideProgressBar={false} 
-              newestOnTop={false} 
-              closeOnClick 
-              rtl={false} 
-              pauseOnFocusLoss 
-              draggable 
-              pauseOnHover 
+            <ToastContainer
+              position="top-right"
+              autoClose={3000}
+              hideProgressBar={false}
+              newestOnTop={false}
+              closeOnClick
+              rtl={false}
+              pauseOnFocusLoss
+              draggable
+              pauseOnHover
             />
           </div>
         </div>

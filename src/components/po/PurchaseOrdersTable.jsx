@@ -15,6 +15,7 @@ export default function PurchaseOrdersTable({ orders = [], onEdit, onDelete, onR
           <th>Status</th>
           <th>Order Date</th>
           <th>Expected Date</th>
+          <th>Received Date</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -29,8 +30,9 @@ export default function PurchaseOrdersTable({ orders = [], onEdit, onDelete, onR
               <td>{order.price}</td>
               <td>{order.totalAmount}</td>
               <td>{order.status}</td>
-              <td>{order.orderDate}</td>
-              <td>{order.expectedDate}</td>
+              <td>{order.orderDate || "-"}</td>
+              <td>{order.expectedDate || "-"}</td>
+              <td>{order.receivedDate ? new Date(order.receivedDate).toLocaleString() : "-"}</td>
               <td>
                 <Button
                   size="sm"
@@ -61,7 +63,7 @@ export default function PurchaseOrdersTable({ orders = [], onEdit, onDelete, onR
           ))
         ) : (
           <tr>
-            <td colSpan="10" className="text-center">
+            <td colSpan="11" className="text-center">
               No purchase orders found.
             </td>
           </tr>

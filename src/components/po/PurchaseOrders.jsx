@@ -50,7 +50,6 @@ export default function PurchaseOrders() {
     }
   };
 
-  // ✅ New function: Mark PO as Received
   const handleReceive = async (order) => {
     if (!window.confirm(`Mark PO ${order.poNumber} as Received?`)) return;
     try {
@@ -87,7 +86,7 @@ export default function PurchaseOrders() {
             setShowModal(true);
           }}
           onDelete={(order) => handleDelete(order.id)}
-          onReceive={handleReceive}   // ✅ pass new handler
+          onReceive={handleReceive}
         />
       )}
 
