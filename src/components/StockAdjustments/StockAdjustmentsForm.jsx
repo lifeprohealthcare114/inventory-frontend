@@ -1,11 +1,7 @@
 // src/components/Stock/StockAdjustmentForm.jsx
 import React, { useEffect, useState } from "react";
-import { Modal, Button, Form, Row, Col } from "react-bootstrap";
-import {
-  fetchItems,
-  fetchWarehouses,
-  createStockAdjustment,
-} from "../../api/api";
+import { Modal, Button, Form, Row, Col, Spinner } from "react-bootstrap";
+import { fetchItems, fetchWarehouses, createStockAdjustment } from "../../api/api";
 
 export default function StockAdjustmentForm({ show, onClose, onSaved }) {
   const [items, setItems] = useState([]);
@@ -14,56 +10,77 @@ export default function StockAdjustmentForm({ show, onClose, onSaved }) {
     itemId: "",
     warehouseId: "",
     type: "Damage",
-    quantity: 0,
+    quantity: "",
     notes: "",
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  // Load items & warehouses when modal opens
+  // Normalize API response
+  const normalizeAdjustment = (adj) => ({
+    id: adj.id,
+    date: adj.date,
+    itemId: adj.itemId ?? adj.item_id,
+    itemName: adj.itemName ?? adj.itemName ?? "",
+    warehouseId: adj.warehouseId ?? adj.warehouse_id,
+    warehouseName: adj.warehouseName ?? adj.warehouseName ?? "",
+    type: adj.type,
+    quantity: adj.quantity ?? 0,
+    notes: adj.notes ?? "",
+    status: adj.status ?? "PENDING",
+  });
+
   useEffect(() => {
-    if (show) {
-      fetchItems()
-        .then((res) => setItems(res.data))
-        .catch(console.error);
+    if (!show) return;
 
-      fetchWarehouses()
-        .then((res) => setWarehouses(res.data))
-        .catch(console.error);
-    }
+    fetchItems()
+      .then((res) => setItems(res.data || []))
+      .catch((err) => console.error("Failed to load items:", err));
+
+    fetchWarehouses()
+      .then((res) => setWarehouses(res.data || []))
+      .catch((err) => console.error("Failed to load warehouses:", err));
   }, [show]);
 
   const onChange = (e) => {
-    setForm({
-      ...form,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const submit = async () => {
-    setLoading(true);
-    try {
-      await createStockAdjustment({
-        ...form,
-        itemId: Number(form.itemId),
-        warehouseId: Number(form.warehouseId),
-        quantity: Number(form.quantity),
-      });
+    if (!form.itemId || !form.warehouseId || !form.quantity) {
+      setError("Please fill all required fields.");
+      return;
+    }
 
-      onSaved && onSaved();
-      onClose();
+    setLoading(true);
+    setError("");
+    try {
+      const payload = {
+        item_id: Number(form.itemId),
+        warehouse_id: Number(form.warehouseId),
+        type: form.type,
+        quantity: Number(form.quantity),
+        notes: form.notes,
+      };
+
+      const res = await createStockAdjustment(payload);
+
+      // Pass the new normalized adjustment back to parent
+      onSaved && onSaved(normalizeAdjustment(res.data || res));
+
+      // Close modal and reset form
       setForm({
         itemId: "",
         warehouseId: "",
         type: "Damage",
-        quantity: 0,
+        quantity: "",
         notes: "",
       });
+      onClose();
     } catch (err) {
       console.error("Failed to create adjustment:", err);
-      alert(
-        "Failed to create adjustment: " +
-          (err.response?.data?.message || err.message)
-      );
+      setError(err.response?.data?.message || err.message || "Unknown error");
     } finally {
       setLoading(false);
     }
@@ -75,17 +92,14 @@ export default function StockAdjustmentForm({ show, onClose, onSaved }) {
         <Modal.Title>New Stock Adjustment</Modal.Title>
       </Modal.Header>
       <Modal.Body>
+        {error && <div className="alert alert-danger">{error}</div>}
         <Form>
           <Row className="g-2">
             {/* Item */}
             <Col md={12}>
               <Form.Group>
                 <Form.Label>Item</Form.Label>
-                <Form.Select
-                  name="itemId"
-                  value={form.itemId}
-                  onChange={onChange}
-                >
+                <Form.Select name="itemId" value={form.itemId} onChange={onChange}>
                   <option value="">Select item</option>
                   {items.map((i) => (
                     <option key={i.id} value={i.id}>
@@ -159,7 +173,7 @@ export default function StockAdjustmentForm({ show, onClose, onSaved }) {
         </Form>
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={onClose} disabled={loading}>
           Cancel
         </Button>
         <Button
@@ -167,7 +181,7 @@ export default function StockAdjustmentForm({ show, onClose, onSaved }) {
           onClick={submit}
           disabled={loading || !form.itemId || !form.warehouseId || !form.quantity}
         >
-          {loading ? "Saving..." : "Save"}
+          {loading ? <Spinner size="sm" animation="border" /> : "Save"}
         </Button>
       </Modal.Footer>
     </Modal>

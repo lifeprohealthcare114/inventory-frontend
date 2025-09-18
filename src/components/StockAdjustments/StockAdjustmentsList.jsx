@@ -14,13 +14,27 @@ export default function StockAdjustmentList({ currentUser }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Normalize API response
+  const normalizeAdjustment = (adj) => ({
+    id: adj.id,
+    date: adj.date,
+    itemId: adj.itemId ?? adj.item_id,
+    itemName: adj.itemName ?? adj.itemName ?? "",
+    warehouseId: adj.warehouseId ?? adj.warehouse_id,
+    warehouseName: adj.warehouseName ?? adj.warehouseName ?? "",
+    type: adj.type,
+    quantity: adj.quantity ?? 0,
+    notes: adj.notes ?? "",
+    status: adj.status ?? "PENDING",
+  });
+
   const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
     try {
-      setLoading(true);
-      setError("");
       const res = await fetchStockAdjustments();
-      const data = res?.data;
-      setAdjustments(Array.isArray(data) ? data : []);
+      const data = Array.isArray(res.data) ? res.data.map(normalizeAdjustment) : [];
+      setAdjustments(data);
     } catch (err) {
       console.error("Error loading adjustments:", err);
       setError("Failed to load stock adjustments.");
@@ -36,23 +50,24 @@ export default function StockAdjustmentList({ currentUser }) {
 
   const onApprove = async (id, approve) => {
     try {
-      if (approve) {
-        await approveStockAdjustment(id);
-      } else {
-        await rejectStockAdjustment(id);
-      }
-      // Update status locally without full reload
+      let updated;
+      if (approve) updated = await approveStockAdjustment(id);
+      else updated = await rejectStockAdjustment(id);
+
       setAdjustments((prev) =>
         prev.map((adj) =>
-          adj.id === id
-            ? { ...adj, status: approve ? "APPROVED" : "REJECTED" }
-            : adj
+          adj.id === id ? normalizeAdjustment(updated.data || updated) : adj
         )
       );
     } catch (err) {
       console.error("Approval error:", err);
       alert("Failed to update approval status.");
     }
+  };
+
+  const onSaved = (newAdjustment) => {
+    setAdjustments((prev) => [normalizeAdjustment(newAdjustment), ...prev]);
+    setShowForm(false);
   };
 
   return (
@@ -70,7 +85,7 @@ export default function StockAdjustmentList({ currentUser }) {
 
       {error && <Alert variant="danger">{error}</Alert>}
 
-      {!loading && adjustments.length === 0 && (
+      {!loading && adjustments.length === 0 && !error && (
         <Alert variant="info">No stock adjustments found.</Alert>
       )}
 
@@ -145,7 +160,7 @@ export default function StockAdjustmentList({ currentUser }) {
       <StockAdjustmentForm
         show={showForm}
         onClose={() => setShowForm(false)}
-        onSaved={load}
+        onSaved={onSaved}
         currentUser={currentUser}
       />
     </div>

@@ -7,7 +7,7 @@ import { useDataContext } from "../../context/DataContext";
 import axios from "axios";
 
 const ItemsAssets = () => {
-  const { items, setItems, addItem, editItem, removeItem, loading, error } = useDataContext();
+  const { items, addItem, editItem, removeItem, loading, error } = useDataContext();
 
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -17,7 +17,6 @@ const ItemsAssets = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
 
-  // Fetch dropdown data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -36,65 +35,71 @@ const ItemsAssets = () => {
     fetchData();
   }, []);
 
-  // ---------------- Save item ----------------
   const handleSave = async (formData) => {
     try {
+      if (!formData.name || !formData.itemCode) {
+        alert("Item Name and Item Code are required.");
+        return;
+      }
+
       let savedItem;
       let quantityChange = 0;
 
       if (formData.id) {
-        const existing = items.find(it => it.id === formData.id) || {};
+        const existing = items.find((it) => it.id === formData.id) || {};
         quantityChange = Number(formData.quantity || 0) - Number(existing.quantity || 0);
         savedItem = await editItem(formData.id, formData);
       } else {
         quantityChange = Number(formData.quantity || 0);
         const { id, ...newItem } = formData;
-        savedItem = await addItem(newItem);
+        savedItem = await addItem(newItem); // Must return full saved item with id
       }
 
-      if (!savedItem) return;
+      if (!savedItem || !savedItem.id) {
+        console.error("Saved item ID is missing. Stock movement skipped.");
+        return;
+      }
 
-      // ---------------- Stock Movement Logging ----------------
-      if (quantityChange !== 0) {
+      // Stock movement only if quantity changed and warehouseId exists
+      const warehouseId = formData.warehouseId || savedItem.warehouseId;
+      if (quantityChange !== 0 && warehouseId) {
         const movementPayload = {
           itemId: savedItem.id,
-          quantityChange,
+          quantity: Math.abs(quantityChange),
           type: quantityChange > 0 ? "IN" : "OUT",
-          warehouseId: formData.warehouseId || savedItem.warehouseId || null,
-          reference: formData.reference || null,
-          notes: formData.notes || (quantityChange > 0 ? "Stock increase on save" : "Stock decrease on save"),
+          warehouseId,
+          reference: null,
+          notes: quantityChange > 0 ? "Stock increase on save" : "Stock decrease on save",
         };
-        await axios.post("http://localhost:8080/api/stock-movements", movementPayload);
-      }
 
-      // ---------------- Update items in frontend ----------------
-      setItems(prev =>
-        prev.map(it => (it.id === savedItem.id ? { ...it, quantity: savedItem.quantity } : it))
-      );
+        console.log("Stock movement payload:", movementPayload);
+
+        try {
+          await axios.post("http://localhost:8080/api/stock-movements", movementPayload);
+        } catch (err) {
+          console.error("Stock movement logging failed:", err);
+        }
+      }
 
       setEditingItem(null);
       setShowModal(false);
       return savedItem;
-
     } catch (err) {
       console.error("Failed to save item:", err);
       throw err;
     }
   };
 
-  // ---------------- Delete item ----------------
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     try {
       await removeItem(deleteTarget.id);
-      setItems(prev => prev.filter(it => it.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (err) {
       console.error("Failed to delete item:", err);
     }
   };
 
-  // ---------------- Low-stock helper ----------------
   const isLowStock = (it) => {
     const min = it.minimumStockLevel ?? it.reorderLevel ?? 0;
     return (it.quantity || 0) <= min;
@@ -110,29 +115,16 @@ const ItemsAssets = () => {
       {error && <div className="alert alert-danger">Error: {error}</div>}
       {loading && <div className="alert alert-info">Loading items...</div>}
 
-      {/* Stats */}
       <div className="d-flex gap-3 mb-4 flex-wrap">
-        <div className="card p-3 flex-fill text-center">
-          <h6>Total Items</h6>
-          <h4>{items.length}</h4>
-        </div>
-        <div className="card p-3 flex-fill text-center">
-          <h6>Total Quantity</h6>
-          <h4>{items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)}</h4>
-        </div>
-        <div className="card p-3 flex-fill text-center">
-          <h6>Low Stock Items</h6>
-          <h4>{items.filter(isLowStock).length}</h4>
-        </div>
-        <div className="card p-3 flex-fill text-center">
-          <h6>Inactive Items</h6>
-          <h4>{items.filter(i => i.status === "Inactive").length}</h4>
-        </div>
+        <div className="card p-3 flex-fill text-center"><h6>Total Items</h6><h4>{items.length}</h4></div>
+        <div className="card p-3 flex-fill text-center"><h6>Total Quantity</h6><h4>{items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)}</h4></div>
+        <div className="card p-3 flex-fill text-center"><h6>Low Stock Items</h6><h4>{items.filter(isLowStock).length}</h4></div>
+        <div className="card p-3 flex-fill text-center"><h6>Inactive Items</h6><h4>{items.filter((i) => i.status === "Inactive").length}</h4></div>
       </div>
 
       <ItemsTable
         items={items}
-        onEdit={item => { setEditingItem(item); setShowModal(true); }}
+        onEdit={(item) => { setEditingItem(item); setShowModal(true); }}
         onDelete={setDeleteTarget}
         categories={categories}
         suppliers={suppliers}
