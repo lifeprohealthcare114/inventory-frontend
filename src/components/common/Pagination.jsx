@@ -2,7 +2,7 @@ import React from "react";
 import { Pagination as BSPagination } from "react-bootstrap";
 
 export default function Pagination({ page, totalPages, onChange }) {
-  if (totalPages <= 1) return null; // no need to show
+  if (totalPages <= 1) return null;
 
   const handleClick = (p) => {
     if (p < 1 || p > totalPages) return;
@@ -11,13 +11,10 @@ export default function Pagination({ page, totalPages, onChange }) {
 
   const getPaginationItems = () => {
     const items = [];
-    const maxButtons = 5; // max page buttons to show
+    const maxButtons = 5;
     let start = Math.max(1, page - Math.floor(maxButtons / 2));
     let end = Math.min(totalPages, start + maxButtons - 1);
-
-    if (end - start < maxButtons - 1) {
-      start = Math.max(1, end - maxButtons + 1);
-    }
+    if (end - start < maxButtons - 1) start = Math.max(1, end - maxButtons + 1);
 
     for (let i = start; i <= end; i++) {
       items.push(

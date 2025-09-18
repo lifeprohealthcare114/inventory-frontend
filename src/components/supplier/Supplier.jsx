@@ -1,14 +1,29 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import SupplierTable from "./SupplierTable";
 import SupplierModal from "./SupplierModal";
-import { Button } from "react-bootstrap";
+import { Button, Form } from "react-bootstrap";
 import { useDataContext } from "../../context/DataContext";
 
 const Supplier = () => {
-  const { suppliers, addSupplier, editSupplier, removeSupplier } = useDataContext();
+  const {
+    suppliers,
+    fetchSuppliers,
+    addSupplier,
+    editSupplier,
+    removeSupplier,
+    supplierTotalPages,
+  } = useDataContext();
 
   const [showModal, setShowModal] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState(null);
+  const [page, setPage] = useState(0);
+  const [size] = useState(10); // default page size
+  const [search, setSearch] = useState("");
+
+  // 🔹 Fetch suppliers whenever page/search changes
+  useEffect(() => {
+    fetchSuppliers(page, size, search);
+  }, [page, size, search, fetchSuppliers]);
 
   const handleAddSupplier = async (supplier) => {
     if (editingSupplier) {
@@ -18,6 +33,7 @@ const Supplier = () => {
     }
     setEditingSupplier(null);
     setShowModal(false);
+    fetchSuppliers(page, size, search); // refresh after save
   };
 
   const handleEditSupplier = (supplier) => {
@@ -27,6 +43,7 @@ const Supplier = () => {
 
   const handleDeleteSupplier = async (id) => {
     await removeSupplier(id);
+    fetchSuppliers(page, size, search); // refresh after delete
   };
 
   return (
@@ -36,10 +53,26 @@ const Supplier = () => {
         <Button onClick={() => setShowModal(true)}>+ Add Supplier</Button>
       </div>
 
+      {/* 🔹 Search Box */}
+      <div className="mb-3">
+        <Form.Control
+          type="text"
+          placeholder="Search suppliers..."
+          value={search}
+          onChange={(e) => {
+            setPage(0);
+            setSearch(e.target.value);
+          }}
+        />
+      </div>
+
       <SupplierTable
         suppliers={suppliers}
         onEdit={handleEditSupplier}
         onDelete={handleDeleteSupplier}
+        page={page}
+        totalPages={supplierTotalPages}
+        onPageChange={setPage}
       />
 
       {showModal && (

@@ -1,15 +1,13 @@
-// src/context/DataContext.js
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import * as api from "../api/api";
 
 const DataContext = createContext();
 export const useDataContext = () => useContext(DataContext);
 
-// ---------- Settings ----------
 const LOW_STOCK_THRESHOLD = 5;
 
-// ---------- Provider ----------
 const DataProvider = ({ children }) => {
+  // ------------------ Base States ------------------
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [items, setItems] = useState([]);
@@ -19,17 +17,30 @@ const DataProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // ---------- Helpers ----------
+  // ------------------ Pagination ------------------
+  const [warehousesPage, setWarehousesPage] = useState(0);
+  const [warehousesTotalPages, setWarehousesTotalPages] = useState(0);
+  const [warehousesSearch, setWarehousesSearch] = useState("");
+
+  const [suppliersPage, setSuppliersPage] = useState(0);
+  const [suppliersTotalPages, setSuppliersTotalPages] = useState(0);
+  const [suppliersSearch, setSuppliersSearch] = useState("");
+
+  // ------------------ Dashboard Aggregates ------------------
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalStockMovements, setTotalStockMovements] = useState(0);
+  const [inventoryByCategory, setInventoryByCategory] = useState([]);
+  const [categoryDistribution, setCategoryDistribution] = useState([]);
+
+  // ------------------ Helpers ------------------
   const handleError = (err) => {
     console.error(err);
     setError(err?.response?.data?.message || err.message || "Unknown error");
   };
-
   const clearError = () => setError(null);
 
   const normalizeList = (res) => res?.data?.content ?? res?.data ?? [];
   const snapshot = (data) => JSON.parse(JSON.stringify(data));
-
   const wrap = async (fn) => {
     try {
       clearError();
@@ -44,7 +55,6 @@ const DataProvider = ({ children }) => {
   const getQty = (i) => i?.stock ?? i?.quantity ?? i?.qty ?? 0;
   const getPrice = (i) => i?.price ?? i?.cost ?? 0;
 
-  // ---------- Enrichers ----------
   const enrichCategories = useCallback(
     (categoriesList, itemsList) =>
       categoriesList.map((c) => {
@@ -57,22 +67,6 @@ const DataProvider = ({ children }) => {
     []
   );
 
-  const enrichWarehouses = useCallback(
-    (warehousesList, itemsList) =>
-      warehousesList.map((w) => {
-        const relatedItems = itemsList.filter((i) => i.warehouseId === w.id);
-        const itemsCount = relatedItems.length;
-        const value = relatedItems.reduce((sum, i) => sum + getQty(i) * getPrice(i), 0);
-        const associatedItems = relatedItems
-          .map((i) => i.name || i.itemName || i.code || "")
-          .filter(Boolean)
-          .join(", ");
-        return { ...w, itemsCount, value, associatedItems };
-      }),
-    []
-  );
-
-  // ---------- Safe Fetch ----------
   const safeFetch = useCallback(async (fetchFn, setter) => {
     try {
       const res = await fetchFn();
@@ -86,9 +80,30 @@ const DataProvider = ({ children }) => {
     }
   }, []);
 
-  // ---------- Fetchers ----------
+  // ------------------ Fetchers ------------------
   const fetchCategoriesData = useCallback(() => safeFetch(api.fetchCategories, setCategories), [safeFetch]);
-  const fetchSuppliersData = useCallback(() => safeFetch(api.fetchSuppliers, setSuppliers), [safeFetch]);
+
+  const fetchSuppliersData = useCallback(async () => {
+    try {
+      const res = await api.fetchSuppliersPaginated({
+        page: suppliersPage,
+        size: 10,
+        search: suppliersSearch,
+        sortField: "name",
+        sortDir: "asc",
+      });
+      const list = normalizeList(res);
+      setSuppliers(list);
+      setSuppliersTotalPages(res.data.totalPages || 0);
+      return list;
+    } catch (err) {
+      handleError(err);
+      setSuppliers([]);
+      setSuppliersTotalPages(0);
+      return [];
+    }
+  }, [suppliersPage, suppliersSearch]);
+
   const fetchItemsData = useCallback(async () => {
     try {
       const res = await api.fetchItems();
@@ -101,11 +116,51 @@ const DataProvider = ({ children }) => {
       return [];
     }
   }, []);
-  const fetchWarehousesData = useCallback(() => safeFetch(api.fetchWarehouses, setWarehouses), [safeFetch]);
+
+  const fetchWarehousesData = useCallback(async () => {
+    try {
+      const res = await api.fetchWarehousesPaginated({
+        page: warehousesPage,
+        size: 10,
+        search: warehousesSearch,
+        sortField: "name",
+        sortDir: "asc",
+      });
+      const list = normalizeList(res);
+      setWarehouses(list);
+      setWarehousesTotalPages(res.data.totalPages || 0);
+      return list;
+    } catch (err) {
+      handleError(err);
+      setWarehouses([]);
+      setWarehousesTotalPages(0);
+      return [];
+    }
+  }, [warehousesPage, warehousesSearch]);
+
   const fetchPurchaseOrdersData = useCallback(() => safeFetch(api.fetchPurchaseOrders, setPurchaseOrders), [safeFetch]);
   const fetchStockMovementsData = useCallback(() => safeFetch(api.fetchStockMovements, setStockMovements), [safeFetch]);
 
-  // ---------- Fetch All ----------
+  // ------------------ Dashboard Aggregates Computation ------------------
+  const computeDashboardAggregates = useCallback((categoriesList, itemsList, stockList) => {
+    setTotalItems(itemsList.length);
+    setTotalStockMovements(stockList.length);
+
+    const invByCategory = categoriesList.map((c) => {
+      const relatedItems = itemsList.filter((i) => i.categoryId === c.id);
+      const totalValue = relatedItems.reduce((sum, i) => sum + getQty(i) * getPrice(i), 0);
+      return { name: c.name, value: totalValue };
+    });
+    setInventoryByCategory(invByCategory);
+
+    const categoryDist = categoriesList.map((c) => {
+      const relatedItemsCount = itemsList.filter((i) => i.categoryId === c.id).length;
+      return { name: c.name, count: relatedItemsCount };
+    });
+    setCategoryDistribution(categoryDist);
+  }, []);
+
+  // ------------------ Fetch All ------------------
   const fetchAll = useCallback(async () => {
     setLoading(true);
     clearError();
@@ -120,14 +175,17 @@ const DataProvider = ({ children }) => {
       ]);
 
       const fulfilledResults = results.map((r) => (r.status === "fulfilled" ? r.value : []));
-
       const catRes = fulfilledResults[0];
       const itemRes = fulfilledResults[2];
       const whRes = fulfilledResults[3];
+      const stockRes = fulfilledResults[5];
 
       setItems(itemRes);
       setCategories(enrichCategories(catRes, itemRes));
-      setWarehouses(enrichWarehouses(whRes, itemRes));
+      setWarehouses(whRes);
+
+      // Compute dashboard aggregates
+      computeDashboardAggregates(catRes, itemRes, stockRes);
     } catch (err) {
       handleError(err);
     } finally {
@@ -141,7 +199,7 @@ const DataProvider = ({ children }) => {
     fetchPurchaseOrdersData,
     fetchStockMovementsData,
     enrichCategories,
-    enrichWarehouses,
+    computeDashboardAggregates,
   ]);
 
   useEffect(() => {
@@ -150,7 +208,7 @@ const DataProvider = ({ children }) => {
 
   const reload = fetchAll;
 
-  // ---------- CRUD Helpers ----------
+  // ------------------ CRUD Helpers ------------------
   const createEntity = (setter, apiFn) => async (data) =>
     wrap(async () => {
       const tempId = `temp-${Date.now()}`;
@@ -192,7 +250,7 @@ const DataProvider = ({ children }) => {
       }
     });
 
-  // ---------- Exposed Methods ----------
+  // ------------------ Exposed Methods ------------------
   return (
     <DataContext.Provider
       value={{
@@ -207,9 +265,15 @@ const DataProvider = ({ children }) => {
         removeCategory: removeEntity(categories, setCategories, api.deleteCategory),
 
         suppliers,
+        suppliersPage,
+        setSuppliersPage,
+        suppliersTotalPages,
+        suppliersSearch,
+        setSuppliersSearch,
         addSupplier: createEntity(setSuppliers, api.createSupplier),
         editSupplier: updateEntity(suppliers, setSuppliers, api.updateSupplier),
         removeSupplier: removeEntity(suppliers, setSuppliers, api.deleteSupplier),
+        fetchSuppliers: fetchSuppliersData,
 
         items,
         addItem: createEntity(setItems, api.createItem),
@@ -217,6 +281,11 @@ const DataProvider = ({ children }) => {
         removeItem: removeEntity(items, setItems, api.deleteItem),
 
         warehouses,
+        warehousesPage,
+        setWarehousesPage,
+        warehousesTotalPages,
+        warehousesSearch,
+        setWarehousesSearch,
         addWarehouse: createEntity(setWarehouses, api.createWarehouse),
         editWarehouse: updateEntity(warehouses, setWarehouses, api.updateWarehouse),
         removeWarehouse: removeEntity(warehouses, setWarehouses, api.deleteWarehouse),
@@ -231,6 +300,12 @@ const DataProvider = ({ children }) => {
         addStockMovement: createEntity(setStockMovements, api.createStockMovement),
         editStockMovement: updateEntity(stockMovements, setStockMovements, api.updateStockMovement),
         removeStockMovement: removeEntity(stockMovements, setStockMovements, api.deleteStockMovement),
+
+        // Dashboard aggregates
+        totalItems,
+        totalStockMovements,
+        inventoryByCategory,
+        categoryDistribution,
       }}
     >
       {children}

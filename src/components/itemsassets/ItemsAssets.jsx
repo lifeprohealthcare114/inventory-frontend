@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from "react";
-import { Button } from "react-bootstrap";
+import React, { useState, useEffect, useCallback } from "react";
+import { Button, Form, Pagination, Row, Col, Spinner, Alert } from "react-bootstrap";
 import ItemsTable from "./ItemsTable";
 import ItemModal from "./ItemModal";
 import DeleteConfirmModal from "../DeleteConfirmModal";
-import { useDataContext } from "../../context/DataContext";
 import axios from "axios";
+import debounce from "lodash.debounce";
 
 const ItemsAssets = () => {
-  const { items, addItem, editItem, removeItem, loading, error } = useDataContext();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -17,8 +19,17 @@ const ItemsAssets = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
 
+  // Pagination & Sorting
+  const [page, setPage] = useState(0);
+  const [size, setSize] = useState(10);
+  const [totalPages, setTotalPages] = useState(0);
+  const [sortField, setSortField] = useState("name");
+  const [sortDir, setSortDir] = useState("asc");
+  const [search, setSearch] = useState("");
+
+  // Fetch dropdown data
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchDropdowns = async () => {
       try {
         const [catRes, supRes, whRes] = await Promise.all([
           axios.get("http://localhost:8080/api/categories"),
@@ -29,112 +40,143 @@ const ItemsAssets = () => {
         setSuppliers(supRes.data);
         setWarehouses(whRes.data);
       } catch (err) {
-        console.error("Failed to fetch dropdown data:", err);
+        console.error("Failed to fetch dropdowns", err);
       }
     };
-    fetchData();
+    fetchDropdowns();
   }, []);
+
+  // Fetch items
+  const fetchItems = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const params = {
+        page,
+        size,
+        sortField,
+        sortDir,
+        search: search || undefined,
+      };
+      const res = await axios.get("http://localhost:8080/api/items/paginated", { params });
+      setItems(res.data.content);
+      setTotalPages(res.data.totalPages);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to fetch items.");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, size, sortField, sortDir, search]);
+
+  // Debounced search (fixed warning)
+  useEffect(() => {
+    const handler = debounce((value) => setSearch(value), 500);
+    return () => handler.cancel(); // cleanup on unmount
+  }, []);
+
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
 
   const handleSave = async (formData) => {
     try {
-      if (!formData.name || !formData.itemCode) {
-        alert("Item Name and Item Code are required.");
-        return;
-      }
-
-      let savedItem;
-      let quantityChange = 0;
-
       if (formData.id) {
-        const existing = items.find((it) => it.id === formData.id) || {};
-        quantityChange = Number(formData.quantity || 0) - Number(existing.quantity || 0);
-        savedItem = await editItem(formData.id, formData);
+        await axios.put(`http://localhost:8080/api/items/${formData.id}`, formData);
       } else {
-        quantityChange = Number(formData.quantity || 0);
-        const { id, ...newItem } = formData;
-        savedItem = await addItem(newItem); // Must return full saved item with id
+        await axios.post("http://localhost:8080/api/items", formData);
       }
-
-      if (!savedItem || !savedItem.id) {
-        console.error("Saved item ID is missing. Stock movement skipped.");
-        return;
-      }
-
-      // Stock movement only if quantity changed and warehouseId exists
-      const warehouseId = formData.warehouseId || savedItem.warehouseId;
-      if (quantityChange !== 0 && warehouseId) {
-        const movementPayload = {
-          itemId: savedItem.id,
-          quantity: Math.abs(quantityChange),
-          type: quantityChange > 0 ? "IN" : "OUT",
-          warehouseId,
-          reference: null,
-          notes: quantityChange > 0 ? "Stock increase on save" : "Stock decrease on save",
-        };
-
-        console.log("Stock movement payload:", movementPayload);
-
-        try {
-          await axios.post("http://localhost:8080/api/stock-movements", movementPayload);
-        } catch (err) {
-          console.error("Stock movement logging failed:", err);
-        }
-      }
-
-      setEditingItem(null);
+      fetchItems();
       setShowModal(false);
-      return savedItem;
     } catch (err) {
-      console.error("Failed to save item:", err);
-      throw err;
+      console.error(err);
+      alert("Failed to save item.");
     }
   };
 
-  const handleConfirmDelete = async () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await removeItem(deleteTarget.id);
+      await axios.delete(`http://localhost:8080/api/items/${deleteTarget.id}`);
+      fetchItems();
       setDeleteTarget(null);
     } catch (err) {
-      console.error("Failed to delete item:", err);
+      console.error(err);
+      alert("Failed to delete item.");
     }
   };
 
-  const isLowStock = (it) => {
-    const min = it.minimumStockLevel ?? it.reorderLevel ?? 0;
-    return (it.quantity || 0) <= min;
+  const handleSort = (field) => {
+    if (sortField === field) setSortDir(sortDir === "asc" ? "desc" : "asc");
+    else {
+      setSortField(field);
+      setSortDir("asc");
+    }
   };
 
   return (
     <div className="p-3">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h3>Items</h3>
-        <Button onClick={() => { setEditingItem(null); setShowModal(true); }}>+ Add Item</Button>
-      </div>
+      {/* Top Controls */}
+      <Row className="mb-3">
+        <Col md={2}>
+          <Form.Select
+            value={size}
+            onChange={(e) => { setSize(Number(e.target.value)); setPage(0); }}
+          >
+            {[5, 10, 25, 50].map((n) => (
+              <option key={n} value={n}>{n} per page</option>
+            ))}
+          </Form.Select>
+        </Col>
+        <Col md={4}>
+          <Form.Control
+            type="text"
+            placeholder="Search by name..."
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+          />
+        </Col>
+        <Col className="text-end">
+          <Button onClick={() => { setEditingItem(null); setShowModal(true); }}>+ Add Item</Button>
+        </Col>
+      </Row>
 
-      {error && <div className="alert alert-danger">Error: {error}</div>}
-      {loading && <div className="alert alert-info">Loading items...</div>}
+      {/* Loading / Error */}
+      {loading && <div className="text-center"><Spinner animation="border" /> Loading items...</div>}
+      {error && <Alert variant="danger">{error}</Alert>}
 
-      <div className="d-flex gap-3 mb-4 flex-wrap">
-        <div className="card p-3 flex-fill text-center"><h6>Total Items</h6><h4>{items.length}</h4></div>
-        <div className="card p-3 flex-fill text-center"><h6>Total Quantity</h6><h4>{items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)}</h4></div>
-        <div className="card p-3 flex-fill text-center"><h6>Low Stock Items</h6><h4>{items.filter(isLowStock).length}</h4></div>
-        <div className="card p-3 flex-fill text-center"><h6>Inactive Items</h6><h4>{items.filter((i) => i.status === "Inactive").length}</h4></div>
-      </div>
+      {/* Items Table */}
+      {!loading && !error && (
+        <ItemsTable
+          items={items}
+          onEdit={(item) => { setEditingItem(item); setShowModal(true); }}
+          onDelete={setDeleteTarget}
+          categories={categories}
+          suppliers={suppliers}
+          warehouses={warehouses}
+          onSort={handleSort}
+          sortField={sortField}
+          sortDir={sortDir}
+        />
+      )}
 
-      <ItemsTable
-        items={items}
-        onEdit={(item) => { setEditingItem(item); setShowModal(true); }}
-        onDelete={setDeleteTarget}
-        categories={categories}
-        suppliers={suppliers}
-        warehouses={warehouses}
-      />
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <Pagination className="mt-3">
+          <Pagination.Prev disabled={page === 0} onClick={() => setPage(page - 1)} />
+          {Array.from({ length: totalPages }).map((_, i) => (
+            <Pagination.Item key={i} active={i === page} onClick={() => setPage(i)}>
+              {i + 1}
+            </Pagination.Item>
+          ))}
+          <Pagination.Next disabled={page + 1 >= totalPages} onClick={() => setPage(page + 1)} />
+        </Pagination>
+      )}
 
+      {/* Modals */}
       {showModal && (
         <ItemModal
           show={showModal}
-          handleClose={() => { setShowModal(false); setEditingItem(null); }}
+          handleClose={() => setShowModal(false)}
           editItem={editingItem}
           onSave={handleSave}
           categories={categories}
@@ -147,7 +189,7 @@ const ItemsAssets = () => {
         <DeleteConfirmModal
           show={!!deleteTarget}
           onCancel={() => setDeleteTarget(null)}
-          onConfirm={handleConfirmDelete}
+          onConfirm={handleDelete}
           item={deleteTarget}
         />
       )}

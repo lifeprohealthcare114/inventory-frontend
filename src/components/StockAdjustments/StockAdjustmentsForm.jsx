@@ -1,11 +1,9 @@
-// src/components/Stock/StockAdjustmentForm.jsx
-import React, { useEffect, useState } from "react";
-import { Modal, Button, Form, Row, Col, Spinner } from "react-bootstrap";
-import { fetchItems, fetchWarehouses, createStockAdjustment } from "../../api/api";
+// src/components/StockAdjustments/StockAdjustmentsForm.jsx
+import React, { useState, useEffect, useCallback } from "react";
+import { Modal, Button, Form, Row, Col, Spinner, InputGroup } from "react-bootstrap";
+import { fetchItemsPaginated, fetchWarehousesPaginated, createStockAdjustment } from "../../api/api";
 
 export default function StockAdjustmentForm({ show, onClose, onSaved }) {
-  const [items, setItems] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
   const [form, setForm] = useState({
     itemId: "",
     warehouseId: "",
@@ -13,10 +11,25 @@ export default function StockAdjustmentForm({ show, onClose, onSaved }) {
     quantity: "",
     notes: "",
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  // Normalize API response
+  // Items
+  const [items, setItems] = useState([]);
+  const [itemLoading, setItemLoading] = useState(false);
+  const [itemPage, setItemPage] = useState(0);
+  const [itemTotalPages, setItemTotalPages] = useState(0);
+  const [itemSearchValue, setItemSearchValue] = useState("");
+
+  // Warehouses
+  const [warehouses, setWarehouses] = useState([]);
+  const [warehouseLoading, setWarehouseLoading] = useState(false);
+  const [warehousePage, setWarehousePage] = useState(0);
+  const [warehouseTotalPages, setWarehouseTotalPages] = useState(0);
+  const [warehouseSearchValue, setWarehouseSearchValue] = useState("");
+
+  // Error & submitting
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
   const normalizeAdjustment = (adj) => ({
     id: adj.id,
     date: adj.date,
@@ -30,18 +43,59 @@ export default function StockAdjustmentForm({ show, onClose, onSaved }) {
     status: adj.status ?? "PENDING",
   });
 
-  useEffect(() => {
+  // ---------------- Fetch Items ----------------
+  const loadItems = useCallback(async () => {
     if (!show) return;
+    setItemLoading(true);
+    try {
+      const res = await fetchItemsPaginated({
+        page: itemPage,
+        size: 10,
+        search: itemSearchValue,
+        sortField: "name",
+        sortDir: "asc",
+      });
+      setItems(res.data.content || []);
+      setItemTotalPages(res.data.totalPages || 0);
+    } catch (err) {
+      console.error("Failed to load items:", err);
+      setItems([]);
+    } finally {
+      setItemLoading(false);
+    }
+  }, [show, itemPage, itemSearchValue]);
 
-    fetchItems()
-      .then((res) => setItems(res.data || []))
-      .catch((err) => console.error("Failed to load items:", err));
+  useEffect(() => {
+    loadItems();
+  }, [loadItems]);
 
-    fetchWarehouses()
-      .then((res) => setWarehouses(res.data || []))
-      .catch((err) => console.error("Failed to load warehouses:", err));
-  }, [show]);
+  // ---------------- Fetch Warehouses ----------------
+  const loadWarehouses = useCallback(async () => {
+    if (!show) return;
+    setWarehouseLoading(true);
+    try {
+      const res = await fetchWarehousesPaginated({
+        page: warehousePage,
+        size: 10,
+        search: warehouseSearchValue,
+        sortField: "name",
+        sortDir: "asc",
+      });
+      setWarehouses(res.data.content || []);
+      setWarehouseTotalPages(res.data.totalPages || 0);
+    } catch (err) {
+      console.error("Failed to load warehouses:", err);
+      setWarehouses([]);
+    } finally {
+      setWarehouseLoading(false);
+    }
+  }, [show, warehousePage, warehouseSearchValue]);
 
+  useEffect(() => {
+    loadWarehouses();
+  }, [loadWarehouses]);
+
+  // ---------------- Form Handlers ----------------
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -53,7 +107,7 @@ export default function StockAdjustmentForm({ show, onClose, onSaved }) {
       return;
     }
 
-    setLoading(true);
+    setSubmitting(true);
     setError("");
     try {
       const payload = {
@@ -65,11 +119,9 @@ export default function StockAdjustmentForm({ show, onClose, onSaved }) {
       };
 
       const res = await createStockAdjustment(payload);
-
-      // Pass the new normalized adjustment back to parent
       onSaved && onSaved(normalizeAdjustment(res.data || res));
 
-      // Close modal and reset form
+      // Reset form
       setForm({
         itemId: "",
         warehouseId: "",
@@ -77,17 +129,18 @@ export default function StockAdjustmentForm({ show, onClose, onSaved }) {
         quantity: "",
         notes: "",
       });
+
       onClose();
     } catch (err) {
       console.error("Failed to create adjustment:", err);
       setError(err.response?.data?.message || err.message || "Unknown error");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <Modal show={show} onHide={onClose} centered>
+    <Modal show={show} onHide={onClose} centered size="lg">
       <Modal.Header closeButton>
         <Modal.Title>New Stock Adjustment</Modal.Title>
       </Modal.Header>
@@ -99,14 +152,34 @@ export default function StockAdjustmentForm({ show, onClose, onSaved }) {
             <Col md={12}>
               <Form.Group>
                 <Form.Label>Item</Form.Label>
-                <Form.Select name="itemId" value={form.itemId} onChange={onChange}>
+                <InputGroup>
+                  <Form.Control
+                    type="text"
+                    placeholder="Search item..."
+                    value={itemSearchValue}
+                    onChange={(e) => { setItemSearchValue(e.target.value); setItemPage(0); }}
+                  />
+                </InputGroup>
+                <Form.Select
+                  name="itemId"
+                  value={form.itemId}
+                  onChange={onChange}
+                  disabled={itemLoading || items.length === 0}
+                  className="mt-1"
+                >
                   <option value="">Select item</option>
                   {items.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.name}
-                    </option>
+                    <option key={i.id} value={i.id}>{i.name}</option>
                   ))}
                 </Form.Select>
+                {itemLoading && <Spinner animation="border" size="sm" className="mt-1" />}
+                {itemTotalPages > 1 && (
+                  <div className="d-flex justify-content-between mt-1">
+                    <Button size="sm" disabled={itemPage === 0} onClick={() => setItemPage(itemPage - 1)}>Prev</Button>
+                    <span>Page {itemPage + 1} / {itemTotalPages}</span>
+                    <Button size="sm" disabled={itemPage + 1 >= itemTotalPages} onClick={() => setItemPage(itemPage + 1)}>Next</Button>
+                  </div>
+                )}
               </Form.Group>
             </Col>
 
@@ -114,18 +187,34 @@ export default function StockAdjustmentForm({ show, onClose, onSaved }) {
             <Col md={12}>
               <Form.Group>
                 <Form.Label>Warehouse</Form.Label>
+                <InputGroup>
+                  <Form.Control
+                    type="text"
+                    placeholder="Search warehouse..."
+                    value={warehouseSearchValue}
+                    onChange={(e) => { setWarehouseSearchValue(e.target.value); setWarehousePage(0); }}
+                  />
+                </InputGroup>
                 <Form.Select
                   name="warehouseId"
                   value={form.warehouseId}
                   onChange={onChange}
+                  disabled={warehouseLoading || warehouses.length === 0}
+                  className="mt-1"
                 >
                   <option value="">Select warehouse</option>
                   {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
+                    <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
                 </Form.Select>
+                {warehouseLoading && <Spinner animation="border" size="sm" className="mt-1" />}
+                {warehouseTotalPages > 1 && (
+                  <div className="d-flex justify-content-between mt-1">
+                    <Button size="sm" disabled={warehousePage === 0} onClick={() => setWarehousePage(warehousePage - 1)}>Prev</Button>
+                    <span>Page {warehousePage + 1} / {warehouseTotalPages}</span>
+                    <Button size="sm" disabled={warehousePage + 1 >= warehouseTotalPages} onClick={() => setWarehousePage(warehousePage + 1)}>Next</Button>
+                  </div>
+                )}
               </Form.Group>
             </Col>
 
@@ -173,15 +262,9 @@ export default function StockAdjustmentForm({ show, onClose, onSaved }) {
         </Form>
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onClose} disabled={loading}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          onClick={submit}
-          disabled={loading || !form.itemId || !form.warehouseId || !form.quantity}
-        >
-          {loading ? <Spinner size="sm" animation="border" /> : "Save"}
+        <Button variant="secondary" onClick={onClose} disabled={submitting}>Cancel</Button>
+        <Button variant="primary" onClick={submit} disabled={submitting || !form.itemId || !form.warehouseId || !form.quantity}>
+          {submitting ? <Spinner size="sm" animation="border" /> : "Save"}
         </Button>
       </Modal.Footer>
     </Modal>

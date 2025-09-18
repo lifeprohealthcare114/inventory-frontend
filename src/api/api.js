@@ -89,13 +89,86 @@ export const fetchLowStockItems = () => api.get("/alerts/low-stock");
 export const createReorderDraftPO = data => api.post("/alerts/reorder", stripId(data));
 
 // ---------------------- Issues ----------------------
-export const fetchIssues = () => api.get("/issues");
-export const createIssue = data => api.post("/issues", stripId(data));
-export const markIssueReturned = (id, data) => api.post(`/issues/${id}/return`, data);
+// ---------------------- Issues (Paginated) ----------------------
+export const fetchIssues = ({
+  page = 0,
+  size = 10,
+  search = "",
+  status = "",
+} = {}) =>
+  api.get("/issues", {
+    params: {
+      page,
+      size,
+      search: search || undefined,
+      status: status || undefined,
+    },
+  });
+
+export const createIssue = (data) => api.post("/issues", stripId(data));
+export const markIssueReturned = (id) => api.post(`/issues/${id}/return`);
 
 // ---------------------- Consumption ----------------------
 export const fetchConsumptions = () => api.get("/consumptions");
 export const createConsumption = data => api.post("/consumptions", stripId(data));
+// ---------------------- Items (Paginated) ----------------------
+export const fetchItemsPaginated = ({ page = 0, size = 10, search = "", sortField = "name", sortDir = "asc" }) =>
+  api.get("/items/paginated", {
+    params: { page, size, search, sortField, sortDir },
+  });
+
+// ---------------------- Warehouses (Paginated) ----------------------
+export const fetchWarehousesPaginated = ({ page = 0, size = 10, search = "", sortField = "name", sortDir = "asc" }) =>
+  api.get("/warehouses/paginated", {
+    params: { page, size, search, sortField, sortDir },
+  });
+// ---------------------- Categories (Paginated) ----------------------
+export const fetchCategoriesPaginated = ({
+  page = 0,
+  size = 10,
+  search = "",
+  sortField = "name",
+  sortDir = "asc",
+}) =>
+  api.get("/categories/paginated", {
+    params: { page, size, search, sortField, sortDir },
+  });
+// ---------------------- Suppliers (Paginated) ----------------------
+export const fetchSuppliersPaginated = ({
+  page = 0,
+  size = 10,
+  search = "",
+  sortField = "name",
+  sortDir = "asc",
+}) =>
+  api.get("/suppliers/paginated", {
+    params: { page, size, search, sortField, sortDir },
+  });
+// ---------------------- Purchase Orders (Paginated) ----------------------
+export const fetchPurchaseOrdersPaginated = ({
+  page = 0,
+  size = 10,
+  search = "",
+  sortField = "poNumber",
+  sortDir = "asc",
+}) =>
+  api.get("/purchase-orders/paginated", {
+    params: { page, size, search, sortField, sortDir },
+  });
+// ---------------------- Stock Movements (Paginated) ----------------------
+export const fetchStockMovementsPaginated = ({
+  page = 0,
+  size = 10,
+  itemId = '',
+  type = '',
+  from = '',
+  to = '',
+  sortField = 'date',
+  sortDir = 'desc',
+}) =>
+  api.get("/stock-movements/paginated", {
+    params: { page, size, itemId, type, from, to, sortField, sortDir },
+  });
 
 // ---------------------- Export Axios instance (optional) ----------------------
 export default api;

@@ -8,11 +8,6 @@ const CategoryModal = ({ show, handleClose, onSave, editCategory }) => {
     name: "",
     description: "",
     status: "Active",
-    itemsCount: 0, // auto-calculated later
-    lowStock: 0,   // auto-calculated later
-    totalValue: 0, // auto-calculated later
-    createdAt: new Date().toISOString().split("T")[0],
-    updatedAt: new Date().toISOString().split("T")[0],
     subCategories: [""],
   });
 
@@ -54,7 +49,6 @@ const CategoryModal = ({ show, handleClose, onSave, editCategory }) => {
   const handleSubmit = () => {
     onSave({
       ...formData,
-      updatedAt: new Date().toISOString().split("T")[0], // update timestamp
       subCategories: formData.subCategories.filter((s) => s.trim() !== ""),
     });
   };
@@ -62,9 +56,7 @@ const CategoryModal = ({ show, handleClose, onSave, editCategory }) => {
   return (
     <Modal show={show} onHide={handleClose}>
       <Modal.Header closeButton>
-        <Modal.Title>
-          {editCategory ? "Edit Category" : "Add Category"}
-        </Modal.Title>
+        <Modal.Title>{editCategory ? "Edit Category" : "Add Category"}</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <Form>
@@ -105,7 +97,7 @@ const CategoryModal = ({ show, handleClose, onSave, editCategory }) => {
             <Form.Label>Status</Form.Label>
             <Form.Select
               name="status"
-              value={formData.status}
+              value={formData.status || "Active"}
               onChange={handleChange}
             >
               <option value="Active">Active</option>
@@ -114,7 +106,7 @@ const CategoryModal = ({ show, handleClose, onSave, editCategory }) => {
             </Form.Select>
           </Form.Group>
 
-          {/* ✅ Sub-Categories */}
+          {/* Sub-Categories */}
           <Form.Group className="mb-3">
             <Form.Label>Sub-Categories</Form.Label>
             {formData.subCategories.map((sub, index) => (
@@ -142,12 +134,8 @@ const CategoryModal = ({ show, handleClose, onSave, editCategory }) => {
         </Form>
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={handleClose}>
-          Cancel
-        </Button>
-        <Button variant="primary" onClick={handleSubmit}>
-          Save
-        </Button>
+        <Button variant="secondary" onClick={handleClose}>Cancel</Button>
+        <Button variant="primary" onClick={handleSubmit}>Save</Button>
       </Modal.Footer>
     </Modal>
   );
