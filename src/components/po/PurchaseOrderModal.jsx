@@ -103,11 +103,6 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
       return;
     }
 
-    if (!formData.item.id && editingItem) {
-      const saved = await handleSaveItem(editingItem);
-      if (!saved?.id) return;
-    }
-
     const totalAmount = (formData.quantity || 0) * (formData.price || 0);
 
     const payload = {
@@ -125,7 +120,7 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
     };
 
     try {
-      await onSave(payload);
+      await onSave(payload); // ✅ call parent save
     } catch (err) {
       console.error(err);
       setErrorMsg(err?.response?.data?.message || "❌ Failed to save purchase order.");
@@ -234,7 +229,7 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
               </Col>
             </Row>
 
-            {/* Order Date & Expected Date */}
+            {/* Dates */}
             <Row>
               <Col md={6}>
                 <Form.Group className="mb-3">
@@ -245,7 +240,12 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
               <Col md={6}>
                 <Form.Group className="mb-3">
                   <Form.Label>Expected Delivery Date</Form.Label>
-                  <Form.Control type="date" name="expectedDate" value={formData.expectedDate === "-" ? "" : formData.expectedDate} onChange={handleChange} />
+                  <Form.Control
+                    type="date"
+                    name="expectedDate"
+                    value={formData.expectedDate === "-" ? "" : formData.expectedDate}
+                    onChange={handleChange}
+                  />
                 </Form.Group>
               </Col>
             </Row>
@@ -283,10 +283,7 @@ export default function PurchaseOrderModal({ show, onHide, onSave, order }) {
       {showItemModal && (
         <ItemModal
           show={showItemModal}
-          handleClose={() => {
-            setShowItemModal(false);
-            setEditingItem(null);
-          }}
+          handleClose={() => { setShowItemModal(false); setEditingItem(null); }}
           editItem={editingItem}
           onSave={handleSaveItem}
           categories={categories}

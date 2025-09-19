@@ -14,7 +14,7 @@ export default function PurchaseOrders() {
 
   // Pagination
   const [page, setPage] = useState(0);
-  const [size, setSize] = useState(10); // page size selector added
+  const [size, setSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
 
   // Search & Sort
@@ -42,6 +42,26 @@ export default function PurchaseOrders() {
     loadOrders();
   }, [loadOrders]);
 
+  // Save PO (create or update)
+  const handleSave = async (payload) => {
+    try {
+      if (payload.id) {
+        // Update existing PO
+        await axios.put(`http://localhost:8080/api/purchase-orders/${payload.id}`, payload);
+      } else {
+        // Create new PO
+        await axios.post("http://localhost:8080/api/purchase-orders", payload);
+      }
+      setShowModal(false);
+      setSelectedOrder(null);
+      await loadOrders();
+    } catch (err) {
+      console.error("Failed to save purchase order:", err);
+      setErrorMsg(err?.response?.data?.message || "❌ Failed to save purchase order.");
+      throw err; // rethrow so modal can show error if needed
+    }
+  };
+
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this order?")) return;
     try {
@@ -62,12 +82,6 @@ export default function PurchaseOrders() {
       console.error("Failed to mark as received:", err);
       setErrorMsg(err?.response?.data?.message || "❌ Failed to mark order as received.");
     }
-  };
-
-  const handleSave = async () => {
-    setShowModal(false);
-    setSelectedOrder(null);
-    await loadOrders();
   };
 
   const handleSortToggle = (field) => {
@@ -163,28 +177,13 @@ export default function PurchaseOrders() {
                     <td>{order.expectedDate ? new Date(order.expectedDate).toLocaleDateString() : "-"}</td>
                     <td>{order.receivedDate ? new Date(order.receivedDate).toLocaleString() : "-"}</td>
                     <td>
-                      <Button
-                        size="sm"
-                        variant="outline-primary"
-                        className="me-2"
-                        onClick={() => setSelectedOrder(order) || setShowModal(true)}
-                      >
+                      <Button size="sm" variant="outline-primary" className="me-2" onClick={() => { setSelectedOrder(order); setShowModal(true); }}>
                         Edit
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline-danger"
-                        className="me-2"
-                        onClick={() => handleDelete(order.id)}
-                      >
+                      <Button size="sm" variant="outline-danger" className="me-2" onClick={() => handleDelete(order.id)}>
                         Delete
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="success"
-                        disabled={order.status === "Received"}
-                        onClick={() => handleReceive(order)}
-                      >
+                      <Button size="sm" variant="success" disabled={order.status === "Received"} onClick={() => handleReceive(order)}>
                         {order.status === "Received" ? "Received" : "Mark as Received"}
                       </Button>
                     </td>
@@ -200,7 +199,6 @@ export default function PurchaseOrders() {
             </tbody>
           </Table>
 
-          {/* Pagination */}
           <div className="d-flex justify-content-center mt-3">
             <Pagination>
               <Pagination.First disabled={page === 0} onClick={() => setPage(0)} />
@@ -219,10 +217,7 @@ export default function PurchaseOrders() {
 
       <PurchaseOrderModal
         show={showModal}
-        onHide={() => {
-          setShowModal(false);
-          setSelectedOrder(null);
-        }}
+        onHide={() => { setShowModal(false); setSelectedOrder(null); }}
         onSave={handleSave}
         order={selectedOrder}
       />
