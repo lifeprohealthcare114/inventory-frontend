@@ -170,5 +170,15 @@ export const fetchStockMovementsPaginated = ({
     params: { page, size, itemId, type, from, to, sortField, sortDir },
   });
 
+// ---------------------- Items per Warehouse (Paginated) ----------------------
+export const fetchItemsForWarehousePaginated = (
+  warehouseId,
+  { page = 0, size = 10, search = "", sortField = "name", sortDir = "asc" } = {}
+) =>
+  api.get(`/items/warehouse/${warehouseId}`, {
+    params: { page, size, search, sortField, sortDir },
+  });
+
+
 // ---------------------- Export Axios instance (optional) ----------------------
 export default api;

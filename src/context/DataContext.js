@@ -141,6 +141,22 @@ const DataProvider = ({ children }) => {
   const fetchPurchaseOrdersData = useCallback(() => safeFetch(api.fetchPurchaseOrders, setPurchaseOrders), [safeFetch]);
   const fetchStockMovementsData = useCallback(() => safeFetch(api.fetchStockMovements, setStockMovements), [safeFetch]);
 
+  // ------------------ Warehouse Items Pagination ------------------
+  const fetchItemsForWarehouse = useCallback(async (warehouseId, page = 0, size = 5) => {
+    try {
+      const res = await api.fetchItemsForWarehousePaginated(warehouseId, {
+        page,
+        size,
+        sortField: "id",
+        sortDir: "asc",
+      });
+      return normalizeList(res); // returns array of items
+    } catch (err) {
+      handleError(err);
+      return [];
+    }
+  }, []);
+
   // ------------------ Dashboard Aggregates Computation ------------------
   const computeDashboardAggregates = useCallback((categoriesList, itemsList, stockList) => {
     setTotalItems(itemsList.length);
@@ -289,6 +305,7 @@ const DataProvider = ({ children }) => {
         addWarehouse: createEntity(setWarehouses, api.createWarehouse),
         editWarehouse: updateEntity(warehouses, setWarehouses, api.updateWarehouse),
         removeWarehouse: removeEntity(warehouses, setWarehouses, api.deleteWarehouse),
+        fetchItemsForWarehouse, // ✅ Added method
 
         purchaseOrders,
         addPurchaseOrder: createEntity(setPurchaseOrders, api.createPurchaseOrder),
